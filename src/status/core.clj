@@ -33,48 +33,38 @@
 
 ;; Commands & Queries
 
-(defonce state (ref (new-system)))
+(defonce state (ref (dom/new-system)))
 
 (defn clear! []
   (dosync
-   (ref-set state (new-system))))
+   (ref-set state (dom/new-system))))
 
 (defn add-meter! [name]
   (dosync
-   (let [id (:next-id @state)
-         meter (dom/make-meter id name)]
-     (alter state
-            assoc
-            :next-id (inc id)
-            :signals (assoc (:signals @state) id meter))
-     meter)))
+   (let [[c sys] (dom/make-meter @state name)]
+     (ref-set state sys)
+     c)))
 
 (defn capture! [id value]
   (dosync
-   (let [meter (get (:signals @state) id)
-         new-meter (dom/capture meter value)]
-     (alter state
-            assoc
-            :signals
-            (assoc (:signals @state) id new-meter))
-     new-meter)))
+   (alter state dom/sys-capture id value)))
 
 ;; Web handlers
 
 (defn get-signal
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
-    (if-let [signal (get-in @state [:signals id])]
-      (bootstrap/edn-response (dom/value signal))
+    (if-let [signal (dom/get-component @state id)]
+      (bootstrap/edn-response (dom/value signal @state))
       bootstrap/not-found)))
 
 (defn add-measurement!
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
-    (if-let [meter (get-in @state [:signals id])]
+    (if-let [meter (dom/get-component @state id)]
       (do
         (capture! id (edn/read-string (ring-req/body-string req)))
-        (bootstrap/edn-response (dom/value (get-in @state [:signals id]))))
+        (bootstrap/edn-response (dom/value (dom/get-component @state id) @state)))
       bootstrap/not-found)))
 
 (defroutes routes
