@@ -45,6 +45,18 @@
      (ref-set state sys)
      c)))
 
+(defn add-min-signal! [name inputs]
+  (dosync
+   (let [[c sys] (dom/make-min-signal @state name inputs)]
+     (ref-set state sys)
+     c)))
+
+(defn add-max-signal! [name inputs]
+  (dosync
+   (let [[c sys] (dom/make-max-signal @state name inputs)]
+     (ref-set state sys)
+     c)))
+
 (defn capture! [id value]
   (dosync
    (alter state dom/sys-capture id value)))

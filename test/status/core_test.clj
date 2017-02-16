@@ -13,29 +13,47 @@
 (t/use-fixtures
   :each (fn [f] (f) (sut/clear!)))
 
+(defn- ok? [resp] (= 200 (:status resp)))
+(defn- not-found? [resp] (= 404 (:status resp)))
+
+(defn- returns? [expected resp]
+  (and (ok? resp)
+       (= (:body resp) expected)))
+
+(defn get-signal [id]
+  (http/get (url "/signal/" id "/value")
+            {:throw-exceptions false}))
+
+(defn post-value [id value]
+  (http/post (url "/meter/" id "/value")
+             {:body (pr-str value)
+              :throw-exceptions false}))
+
 (t/deftest test-signal-get
   (let [id (dom/id (sut/add-meter! 'a/signal))]
     (sut/capture! id 1)
-    (let [resp (http/get (url "/signal/" id "/value"))]
-      (t/is (= "1" (:body resp)))
-      (t/is (= 200 (:status resp)))))
+    (t/is (returns? "1" (get-signal id))))
 
-  (let [resp (http/get (url "/signal/" 12345 "/value")
-                       {:throw-exceptions false})]
-    (t/is (= 404 (:status resp))
-          "Requesting a non-existing signal gives 404 status")))
+  (t/is (not-found? (get-signal 12345))
+        "Requesting a non-existing signal gives 404 status"))
 
 (t/deftest test-signal-post-get
   (let [id (dom/id (sut/add-meter! 'a/signal))]
-    (let [resp (http/post (url "/meter/" id "/value")
-                          {:body "2"})]
-      (t/is (= 200 (:status resp))))
-    (let [resp (http/get (url "/signal/" id "/value"))]
-      (t/is (= "2" (:body resp)))
-      (t/is (= 200 (:status resp)))))
+    (t/is (ok? (post-value id 2)))
+    (t/is (returns? "2" (get-signal id))))
 
-  (let [resp (http/post (url "/meter/" 12345 "/value")
-                        {:body "2" :throw-exceptions false})]
-    (t/is (= 404 (:status resp)))))
+  (t/is (not-found? (post-value 12345 2))))
+
+(t/deftest test-min-max-get
+  (let [a-id (dom/id (sut/add-meter! 'a.signal))
+        b-id (dom/id (sut/add-meter! 'b.signal))
+        c-id (dom/id (sut/add-min-signal! 'min [a-id b-id]))
+        d-id (dom/id (sut/add-max-signal! 'max [a-id b-id]))]
+    (t/is (ok? (post-value a-id 0)))
+    (t/is (ok? (post-value b-id 1)))
+    (t/is (returns? "0" (get-signal c-id)))
+    (t/is (returns? "1" (get-signal d-id)))))
+
+
 
 
