@@ -16,6 +16,9 @@
   A subset of signals are indicators these represent PASS/FAIL status indicators. They are real valued signals [0,1] where 0 is total failure fail, 1 is full pass and values in between are partial failures."
   (value [self system] "Get current measurement"))
 
+(defprotocol Dependent
+  (dependencies [self] "Get ids of dependencies"))
+
 (defrecord InMemoryMeter [id name measurements]
   Component
   (id [_] id)
@@ -56,7 +59,10 @@
   (value [self sys]
     (let [ins (map #(value (get-component sys %) sys) inputs)]
       (when-not (some nil? ins)
-        (apply f ins)))))
+        (apply f ins))))
+
+  Dependent
+  (dependencies [_] (set inputs)))
 
 (defn make-computed-signal
   [sys name inputs function]

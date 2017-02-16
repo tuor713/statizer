@@ -9,27 +9,9 @@
             [ring.util.request :as ring-req]
             [ring.util.response :as ring-resp]
 
+            [hiccup.core :as html]
+
             [status.domain :as dom]))
-
-;; Try out Clojure 1.9 with schema support
-
-;; API
-
-;; - POST /signal/<id>
-;;   adds a new measurement
-
-;; - GET  /signal/<id>/latest
-;;   gets the "current" measurement
-
-;; - GET  /signal/<id>/<no>
-;;   gets a historic measurement
-
-;; - GET  /indicator/<id>
-;;   gets the "current" indicator status
-
-(defn new-system []
-  {:signals {}
-   :next-id 0})
 
 ;; Commands & Queries
 
@@ -79,11 +61,67 @@
         (bootstrap/edn-response (dom/value (dom/get-component @state id) @state)))
       bootstrap/not-found)))
 
+(defn view-signal
+  [req]
+  (let [id (Long/parseLong (get-in req [:path-params :id]))]
+    (if-let [signal (dom/get-component @state id)]
+      {:status 200
+       :headers {"Content-Type" "text/html"}
+       :body (html/html
+              [:html
+               [:head
+                [:link {:rel "stylesheet"
+                        :href "/bootstrap-3.3.7/css/bootstrap.min.css"}]
+                [:link {:rel "stylesheet"
+                        :href "/site/site.css"}]]
+               [:body
+                [:div.container
+                 [:div.jumbotron
+                  [:h2 (str (dom/component-name signal))]]
+
+                 [:div.row
+                  [:div.col-lg-6.col-lg-offset-3
+                   (let [v (dom/value signal @state)]
+                     (cond
+                       (nil? v) [:div.alert.status.alert-warning "Undefined"]
+                       (= 1 v) [:div.alert.status.alert-success "100%"]
+                       (> v 0.5) [:div.alert.status.alert-warning (format "%.0f%%" (* 100.0 v))]
+                       :else [:div.alert.status.alert-danger (format "%.0f%%" (* 100.0 v))]))]]
+
+                 (when (satisfies? dom/Dependent signal)
+                   [:div.row
+                    [:div.col-lg-6.col-lg-offset-3
+                     [:h4 "Dependencies"]
+                     [:table.table
+                      [:thead
+                       [:tr [:th "Name"] [:th "Status"]]]
+                      [:tbody
+                       (for [id (dom/dependencies signal)]
+                         (let [sig (dom/get-component @state id)
+                               v (dom/value sig @state)]
+                           [:tr {:class (cond
+                                          (= 1 v) "success"
+                                          (or (nil? v) (> v 0.5)) "warning"
+                                          :else "danger")}
+                            [:td (dom/component-name sig)]
+                            [:td (if (nil? v)
+                                   "Undefined"
+                                   (format "%.0f%%" (* 100.0 v)))]]))]]]])]
+                [:script {:src "/jquery-1.12.4/jquery.min.js"}]
+                [:script {:src "/bootstrap-3.3.7/js/bootstrap.min.js"}]]])}
+      bootstrap/not-found)))
+
 (defroutes routes
-  [[["/signal/:id/value"
+  [[["/api/signal/:id/value"
      {:get get-signal}]
-    ["/meter/:id/value"
-     {:post add-measurement!}]]])
+
+    ["/api/meter/:id/value"
+     {:post add-measurement!}]
+
+    ["/web/signal/:id"
+     {:get view-signal}]
+
+    ]])
 
 (def service {:env :prod
               ::bootstrap/routes routes

@@ -21,11 +21,11 @@
        (= (:body resp) expected)))
 
 (defn get-signal [id]
-  (http/get (url "/signal/" id "/value")
+  (http/get (url "/api/signal/" id "/value")
             {:throw-exceptions false}))
 
 (defn post-value [id value]
-  (http/post (url "/meter/" id "/value")
+  (http/post (url "/api/meter/" id "/value")
              {:body (pr-str value)
               :throw-exceptions false}))
 
