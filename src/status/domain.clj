@@ -41,6 +41,9 @@
 (defn get-component [sys id]
   (get-in sys [:components id]))
 
+(defn components [sys]
+  (:components sys))
+
 (defn gen-id [sys]
   (let [id (:next-id sys)]
     [id (assoc sys :next-id (inc id))]))

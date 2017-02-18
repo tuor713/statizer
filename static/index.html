@@ -1,0 +1,74 @@
+<html>
+    <head>
+        <link href="/bootstrap-3.3.7/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="/site/site.css" rel="stylesheet" />
+    </head>
+    <body>
+        <div id="app">
+            <div class="container">
+                <div class="row">
+                    <div class="page-header status-heading">
+                        <h1>Statizer</h1>
+                    </div>
+                </div>
+                <router-view></router-view>
+            </div>
+        </div>
+
+        <script type="text/x-template" id="component-status-table">
+         <table class="table">
+           <thead>
+             <tr>
+               <td>Name</td>
+               <td>Status</td>
+             </tr>
+           </thead>
+           <tbody>
+             <tr v-for="dep in signals">
+               <td><router-link v-bind:to="'/signal/'+dep.id">{{dep.name}}</router-link></td>
+               <td v-if="dep.isSuccess()" class="success status">{{dep.formattedValue()}}</td>
+               <td v-else-if="dep.isWarning()" class="warning status">{{dep.formattedValue()}}</td>
+               <td v-else class="danger status">{{dep.formattedValue()}}</td>
+             </tr>
+           </tbody>
+         </table>
+        </script>
+
+        <script type="text/x-template" id="component-signal">
+         <div>
+         <div class="row">
+         <div class="col-lg-6 col-lg-offset-3 status-heading">
+         <h2>{{signal.name}}</h2>
+         </div>
+         </div>
+         <div class="row">
+         <div class="col-lg-6 col-lg-offset-3">
+         <h4>Status</h4>
+         <div v-if="signal.isSuccess()" class="alert status alert-success">
+         {{signal.formattedValue()}}
+         </div>
+         <div v-else-if="signal.isWarning()" class="alert status alert-warning">
+         {{signal.formattedValue()}}
+         </div>
+         <div v-else class="alert status alert-danger">
+         {{signal.formattedValue()}}
+         </div>
+         </div>
+         </div>
+         <div class="row" v-if="signal.hasDependencies()">
+         <div class="col-lg-6 col-lg-offset-3">
+         <h4>Dependencies</h4>
+         <status-table v-bind:signals="signal.dependencies"></status-table>
+         </div>
+         </div>
+         </div>
+        </script>
+
+        <script src="/vue-2.1.10/vue.js"></script>
+        <script src="/vue-router-2.2.1/vue-router.js"></script>
+        <script src="/jquery-1.12.4/jquery.min.js"></script>
+        <script src="/bootstrap-3.3.7/js/bootstrap.min.js"></script>
+
+        <script src="/site/site.js"></script>
+    </body>
+</html>

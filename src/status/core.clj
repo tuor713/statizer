@@ -45,7 +45,52 @@
 
 ;; Web handlers
 
+(defn all-signals []
+  (let [ss @state]
+    (bootstrap/json-response
+     (vec
+      (sort-by :name
+               (for [[id comp] (dom/components ss)]
+                 {:id id
+                  :name (dom/component-name comp)
+                  :value (dom/value comp ss)}))))))
+
 (defn get-signal
+  [req]
+  (if (= "all" (get-in req [:path-params :id]))
+    (all-signals)
+    (let [id (Long/parseLong (get-in req [:path-params :id]))]
+      (if-let [signal (dom/get-component @state id)]
+        (bootstrap/json-response {:id id
+                                  :name (dom/component-name signal)
+                                  :value (dom/value signal @state)
+                                  :dependencies
+                                  (if (satisfies? dom/Dependent signal)
+                                    (vec (dom/dependencies signal))
+                                    [])})
+        bootstrap/not-found))))
+
+(defn get-signal-full
+  [req]
+  (let [id (Long/parseLong (get-in req [:path-params :id]))]
+    (if-let [signal (dom/get-component @state id)]
+      (bootstrap/json-response {:id id
+                                :name (dom/component-name signal)
+                                :value (dom/value signal @state)
+                                :dependencies
+                                (if (satisfies? dom/Dependent signal)
+                                  (mapv
+                                   (fn [id]
+                                     (let [s (dom/get-component @state id)
+                                           v (dom/value s @state)]
+                                       {:id id
+                                        :name (dom/component-name s)
+                                        :value v}))
+                                   (dom/dependencies signal))
+                                  [])})
+      bootstrap/not-found)))
+
+(defn get-signal-value
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
     (if-let [signal (dom/get-component @state id)]
@@ -61,65 +106,18 @@
         (bootstrap/edn-response (dom/value (dom/get-component @state id) @state)))
       bootstrap/not-found)))
 
-(defn view-signal
-  [req]
-  (let [id (Long/parseLong (get-in req [:path-params :id]))]
-    (if-let [signal (dom/get-component @state id)]
-      {:status 200
-       :headers {"Content-Type" "text/html"}
-       :body (html/html
-              [:html
-               [:head
-                [:link {:rel "stylesheet"
-                        :href "/bootstrap-3.3.7/css/bootstrap.min.css"}]
-                [:link {:rel "stylesheet"
-                        :href "/site/site.css"}]]
-               [:body
-                [:div.container
-                 [:div.jumbotron
-                  [:h2 (str (dom/component-name signal))]]
-
-                 [:div.row
-                  [:div.col-lg-6.col-lg-offset-3
-                   (let [v (dom/value signal @state)]
-                     (cond
-                       (nil? v) [:div.alert.status.alert-warning "Undefined"]
-                       (= 1 v) [:div.alert.status.alert-success "100%"]
-                       (> v 0.5) [:div.alert.status.alert-warning (format "%.0f%%" (* 100.0 v))]
-                       :else [:div.alert.status.alert-danger (format "%.0f%%" (* 100.0 v))]))]]
-
-                 (when (satisfies? dom/Dependent signal)
-                   [:div.row
-                    [:div.col-lg-6.col-lg-offset-3
-                     [:h4 "Dependencies"]
-                     [:table.table
-                      [:thead
-                       [:tr [:th "Name"] [:th "Status"]]]
-                      [:tbody
-                       (for [id (dom/dependencies signal)]
-                         (let [sig (dom/get-component @state id)
-                               v (dom/value sig @state)]
-                           [:tr {:class (cond
-                                          (= 1 v) "success"
-                                          (or (nil? v) (> v 0.5)) "warning"
-                                          :else "danger")}
-                            [:td (dom/component-name sig)]
-                            [:td (if (nil? v)
-                                   "Undefined"
-                                   (format "%.0f%%" (* 100.0 v)))]]))]]]])]
-                [:script {:src "/jquery-1.12.4/jquery.min.js"}]
-                [:script {:src "/bootstrap-3.3.7/js/bootstrap.min.js"}]]])}
-      bootstrap/not-found)))
-
 (defroutes routes
-  [[["/api/signal/:id/value"
+  [[["/api/signal/:id"
      {:get get-signal}]
+
+    ["/api/signal/:id/full"
+     {:get get-signal-full}]
+
+    ["/api/signal/:id/value"
+     {:get get-signal-value}]
 
     ["/api/meter/:id/value"
      {:post add-measurement!}]
-
-    ["/web/signal/:id"
-     {:get view-signal}]
 
     ]])
 
