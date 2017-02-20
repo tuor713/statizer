@@ -3,8 +3,10 @@
   (:require [clojure.test :as t]
             [status.core :as sut]
             [status.domain :as dom]
+            [status.types :as type]
             [clj-http.client :as http]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [status.types :as type]))
 
 (def test-port "8080")
 
@@ -56,8 +58,8 @@
   (t/is (not-found? (post-value 12345 2))))
 
 (t/deftest test-min-max-get
-  (let [a-id (dom/id (sut/add-meter! 'a.signal))
-        b-id (dom/id (sut/add-meter! 'b.signal))
+  (let [a-id (dom/id (sut/add-meter! 'a.signal type/TNumber))
+        b-id (dom/id (sut/add-meter! 'b.signal type/TNumber))
         c-id (dom/id (sut/add-min-signal! 'min [a-id b-id]))
         d-id (dom/id (sut/add-max-signal! 'max [a-id b-id]))]
     (t/is (ok? (post-value a-id 0)))

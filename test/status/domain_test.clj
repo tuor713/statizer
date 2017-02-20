@@ -1,5 +1,6 @@
 (ns status.domain-test
   (:require [status.domain :as sut]
+            [status.types :as type]
             [clojure.test :as t]))
 
 (t/deftest test-simple-meter
@@ -37,8 +38,8 @@
 
 (t/deftest test-predefined-signals
   (let [sys (sut/new-system)
-        [m1 s1] (sut/make-meter sys 'a.signal)
-        [m2 s2] (sut/make-meter s1 'b.siginal)
+        [m1 s1] (sut/make-meter sys 'a.signal type/TNumber)
+        [m2 s2] (sut/make-meter s1 'b.siginal type/TNumber)
         [imin s3] (sut/make-min-signal s2 'min [(sut/id m1) (sut/id m2)])
         [imax s4] (sut/make-max-signal s3 'max [(sut/id m1) (sut/id m2)])]
 
@@ -54,5 +55,10 @@
     (t/is (= 1 (sut/value imax (sut/sys-capture (sut/sys-capture s4 (sut/id m1) 0)
                                                 (sut/id m2)
                                                 1))))))
+
+(t/deftest test-type-safety
+  (let [sys (sut/new-system)
+        [m1 s1] (sut/make-meter sys 'a.signal type/TAny)]
+    (t/is (thrown? Exception (sut/make-min-signal s1 'min [(sut/id m1)])))))
 
 

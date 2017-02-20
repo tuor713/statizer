@@ -11,6 +11,7 @@
 
             [hiccup.core :as html]
 
+            [status.types :as type]
             [status.domain :as dom]))
 
 ;; Commands & Queries
@@ -21,11 +22,13 @@
   (dosync
    (ref-set state (dom/new-system))))
 
-(defn add-meter! [name]
-  (dosync
-   (let [[c sys] (dom/make-meter @state name)]
-     (ref-set state sys)
-     c)))
+(defn add-meter!
+  ([name] (add-meter! name type/TAny))
+  ([name type]
+   (dosync
+    (let [[c sys] (dom/make-meter @state name type)]
+      (ref-set state sys)
+      c))))
 
 (defn add-min-signal! [name inputs]
   (dosync
@@ -126,6 +129,16 @@
               ::bootstrap/file-path "static"
               ::bootstrap/type :jetty
               ::bootstrap/port 8080})
+
+(defn bootstrap
+  "Creates a set of sample data to test with"
+  []
+  (clear!)
+  (add-meter! 'job.a type/TIndicator)
+  (add-meter! 'job.b type/TIndicator)
+  (add-min-signal! 'all.jobs [0 1])
+  (capture! 0 0)
+  (capture! 1 1))
 
 (defn run-dev []
   (println "\nCreating your [DEV] server...")
