@@ -34,6 +34,15 @@
          lower ".." upper
          (if upper-inclusive? "]" "["))))
 
+(defmethod print-method RangeType [x ^java.io.Writer w]
+  (.write w "#range-t")
+  (print-method {:type (:type x)
+                 :lower (:lower x)
+                 :upper (:upper x)
+                 :lower-inclusive? (:lower-inclusive? x)
+                 :upper-inclusive? (:upper-inclusive? x)}
+                w))
+
 (defn range-type
   ([lower upper]
    (range-type TNumber lower upper true true))
@@ -66,6 +75,11 @@
   (toString [_]
     (str "[" type "*" "]")))
 
+(defmethod print-method VectorType [x ^java.io.Writer w]
+  (.write w "#vector-t")
+  (print-method {:type (:type x)}
+                w))
+
 (defn vector-type [t] (VectorType. t))
 
 (defn substitute-all? [atypes btypes]
@@ -84,8 +98,12 @@
   (toString [_]
     (str "(" (s/join ", " (map str types)) ")")))
 
+(defmethod print-method TupleType [x ^java.io.Writer w]
+  (.write w "#tuple-t")
+  (print-method (:types x) w))
+
 (defn tuple-type [& ts]
-  (TupleType. ts))
+  (TupleType. (vec ts)))
 
 (defrecord Varargs [types var-type]
   Type
@@ -111,6 +129,10 @@
          var-type "*"
          ")")))
 
+(defmethod print-method Varargs [x ^java.io.Writer w]
+  (.write w "#varargs-t")
+  (print-method {:types (:types x) :var-type (:var-type x)} w))
+
 (defn varargs-type [types var-type]
   (Varargs. types var-type))
 
@@ -127,6 +149,10 @@
   Object
   (toString [_]
     (str domain " -> " range)))
+
+(defmethod print-method FunctionType [x ^java.io.Writer w]
+  (.write w "#function-t")
+  (print-method {:domain (:domain x) :range (:range x)} w))
 
 (defn fn-type [domain range]
   (when-not (or (instance? TupleType domain) (instance? Varargs domain))

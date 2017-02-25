@@ -12,35 +12,54 @@
             [hiccup.core :as html]
 
             [status.types :as type]
-            [status.domain :as dom]))
+            [status.domain :as dom]
+            [status.persistence :as persist]))
 
 ;; Commands & Queries
 
 (defonce state (ref (dom/new-system)))
+(def persistence (atom nil))
+
+(defn save! []
+  (when @persistence
+    (persist/save-system @persistence @state)))
+
+(defn load! []
+  (when @persistence
+    (let [sys (persist/load-system @persistence)]
+      (dosync
+       (ref-set state sys)))))
 
 (defn clear! []
   (dosync
-   (ref-set state (dom/new-system))))
+   (ref-set state (dom/new-system)))
+  (future (save!)))
 
 (defn add-meter!
   ([name] (add-meter! name type/TAny))
   ([name type]
-   (dosync
-    (let [[c sys] (dom/make-meter @state name type)]
-      (ref-set state sys)
-      c))))
+   (let [result (dosync
+                 (let [[c sys] (dom/make-meter @state name type)]
+                   (ref-set state sys)
+                   c))]
+     (future (save!))
+     result)))
 
 (defn add-min-signal! [name inputs]
-  (dosync
-   (let [[c sys] (dom/make-min-signal @state name inputs)]
-     (ref-set state sys)
-     c)))
+  (let [result (dosync
+                (let [[c sys] (dom/make-min-signal @state name inputs)]
+                  (ref-set state sys)
+                  c))]
+    (future (save!))
+    result))
 
 (defn add-max-signal! [name inputs]
-  (dosync
-   (let [[c sys] (dom/make-max-signal @state name inputs)]
-     (ref-set state sys)
-     c)))
+  (let [result (dosync
+                (let [[c sys] (dom/make-max-signal @state name inputs)]
+                  (ref-set state sys)
+                  c))]
+    (future (save!))
+    result))
 
 (defn capture! [id value]
   (dosync
@@ -162,5 +181,9 @@
 (defn -main
   "The entry-point for 'lein run'"
   [& args]
-  (println "\nCreating your server...")
-  (bootstrap/start runnable-service))
+  (let [args (apply hash-map args)]
+    (when (or (args "--file") (args "-f"))
+      (reset! persistence (persist/file-persistence (or (args "--file")
+                                                        (args "-f"))))
+      (load!))
+    (bootstrap/start runnable-service)))

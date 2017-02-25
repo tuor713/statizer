@@ -36,6 +36,10 @@
   (value [self _] (last (:measurements self)))
   (typ [self] typ))
 
+(defmethod print-method InMemoryMeter [x ^java.io.Writer w]
+  (.write w "#meter")
+  (print-method {:id (:id x), :name (:name x), :type (:typ x)} w))
+
 (defn new-system []
   {:components {}
    :next-id 0})
@@ -48,6 +52,8 @@
 
 (defn components [sys]
   (:components sys))
+
+
 
 (defn gen-id [sys]
   (let [id (:next-id sys)]
@@ -74,6 +80,15 @@
 
   Dependent
   (dependencies [_] (set inputs)))
+
+(defmethod print-method ComputedSignal [x ^java.io.Writer w]
+  (.write w "#computed")
+  (print-method {:id (:id x)
+                 :name (:name x)
+                 :inputs (:inputs x)
+                 :f (:f x)
+                 :ftype (:ftype x)}
+                w))
 
 (defn make-computed-signal
   ([sys name inputs function]
@@ -103,4 +118,25 @@
   (let [meter (get-component sys id)
         new-meter (capture meter value)]
     (add-component sys new-meter)))
+
+(defn merge-systems [sys1 sys2]
+  (first
+   (reduce
+    (fn [[sys idmapping] component]
+      (let [[id sys] (gen-id sys)
+            ncomponent (cond
+                         (instance? InMemoryMeter component)
+                         (assoc component :id id)
+
+                         (instance? ComputedSignal component)
+                         (assoc component
+                                :id id
+                                :inputs (mapv idmapping (:inputs component)))
+
+                         :else (throw (IllegalArgumentException.
+                                       (str "Don't know how to merge component: " component))))]
+        [(add-component sys ncomponent)
+         (assoc idmapping (:id component) id)]))
+    [sys1 {}]
+    (sort-by id (vals (:components sys2))))))
 

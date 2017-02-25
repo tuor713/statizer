@@ -61,4 +61,17 @@
         [m1 s1] (sut/make-meter sys 'a.signal type/TAny)]
     (t/is (thrown? Exception (sut/make-min-signal s1 'min [(sut/id m1)])))))
 
+(t/deftest test-merge-systems
+  (let [sys (sut/new-system)
+        [m1 s1] (sut/make-meter sys 'a.signal type/TAny)
+        sysB (sut/new-system)
+        [m2 s2] (sut/make-meter sysB 'b.signal type/TNumber)
+        [i3 s3] (sut/make-min-signal s2 'min [(sut/id m2)])
+        merged (sut/merge-systems s1 s3)]
+
+    (t/is (= 3 (count (sut/components merged))))
+    (t/is (= 'b.signal (sut/component-name (sut/get-component merged 1))))
+    (t/is (= 'min (sut/component-name (sut/get-component merged 2))))
+    (t/is (= #{1} (sut/dependencies (sut/get-component merged 2))))))
+
 
