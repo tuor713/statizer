@@ -17,7 +17,7 @@
                 'computed (fn [v] (status.domain.ComputedSignal. (:id v)
                                                                  (:name v)
                                                                  (:inputs v)
-                                                                 (:f v)
+                                                                 (var-get (resolve (:f v)))
                                                                  (:ftype v)))
 
                 'range-t (fn [v] (status.types.RangeType. (:type v) (:lower v) (:upper v)
@@ -26,9 +26,7 @@
                 'vector-t (fn [v] (status.types.VectorType. (:type v)))
                 'tuple-t (fn [v] (status.types.TupleType. v))
                 'varargs-t (fn [v] (status.types.Varargs. (:types v) (:var-type v)))
-                'function-t (fn [v] (status.types.FunctionType. (:domain v) (:range v)))
-
-                'function (fn [[sym]] (var-get (resolve sym)))}}
+                'function-t (fn [v] (status.types.FunctionType. (:domain v) (:range v)))}}
      r)))
 
 (defn edn-read-string [s]

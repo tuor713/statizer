@@ -8,10 +8,15 @@
             [cheshire.core :as json]
             [status.types :as type]))
 
-(def test-port "8080")
+(def test-port 12345)
 
 (defn- url [& elements]
   (apply str "http://localhost:" test-port elements))
+
+(t/use-fixtures
+  :once (fn [f] (let [service (sut/run-dev test-port)]
+                  (f)
+                  (sut/stop-dev service))))
 
 (t/use-fixtures
   :each (fn [f] (f) (sut/clear!)))

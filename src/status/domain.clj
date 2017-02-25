@@ -86,7 +86,7 @@
   (print-method {:id (:id x)
                  :name (:name x)
                  :inputs (:inputs x)
-                 :f (:f x)
+                 :f (:var (meta (:f x)))
                  :ftype (:ftype x)}
                 w))
 
@@ -108,11 +108,15 @@
 
 (defn make-min-signal
   [sys name inputs]
-  (make-computed-signal sys name inputs min (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
+  (make-computed-signal sys name inputs
+                        (with-meta min {:var 'clojure.core/min})
+                        (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
 
 (defn make-max-signal
   [sys name inputs]
-  (make-computed-signal sys name inputs max (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
+  (make-computed-signal sys name inputs
+                        (with-meta max {:var 'clojure.core/max})
+                        (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
 
 (defn sys-capture [sys id value]
   (let [meter (get-component sys id)

@@ -159,22 +159,27 @@
   (capture! 0 0)
   (capture! 1 1))
 
-(defn run-dev []
-  (println "\nCreating your [DEV] server...")
-  (-> service ;; start with production configuration
-      (merge {:env :dev
-              ;; do not block thread that starts web server
-              ::bootstrap/join? false
-              ;; Routes can be a function that resolve routes,
-              ;;  we can use this to set the routes to be reloadable
-              ::bootstrap/routes #(deref #'routes)
-              ;; all origins are allowed in dev mode
-              ::bootstrap/allowed-origins {:creds true :allowed-origins (constantly true)}})
-      ;; Wire up interceptor chains
-      bootstrap/default-interceptors
-      bootstrap/dev-interceptors
-      bootstrap/create-server
-      bootstrap/start))
+(defn run-dev
+  ([] (run-dev 8080))
+  ([port]
+   (println "\nCreating your [DEV] server...")
+   (-> service ;; start with production configuration
+       (merge {:env :dev
+               ::bootstrap/port port
+               ;; do not block thread that starts web server
+               ::bootstrap/join? false
+               ;; Routes can be a function that resolve routes,
+               ;;  we can use this to set the routes to be reloadable
+               ::bootstrap/routes #(deref #'routes)
+               ;; all origins are allowed in dev mode
+               ::bootstrap/allowed-origins {:creds true :allowed-origins (constantly true)}})
+       ;; Wire up interceptor chains
+       bootstrap/default-interceptors
+       bootstrap/dev-interceptors
+       bootstrap/create-server
+       bootstrap/start)))
+
+(defn stop-dev [service] (bootstrap/stop service))
 
 (defonce runnable-service (bootstrap/create-server service))
 
