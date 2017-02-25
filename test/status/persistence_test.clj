@@ -49,5 +49,13 @@
       (t/is (= 2 (count (dom/components (fs-load (fs-save s2)))))
             "Serialize min computed signal")
       (t/is (= 2 (count (dom/components (fs-load (fs-save s3)))))
-            "Serialize max computed signal"))))
+            "Serialize max computed signal"))
+
+    (let [[m1 s1] (dom/make-meter sys 'a types/TIndicator)
+          [m2 s2] (dom/make-weighted-signal s1 'w [(dom/id m1)] [2])
+          s3 (fs-load (fs-save s2))
+          s4 (dom/sys-capture s3 (dom/id m1) 1)]
+      (t/is (= 2 (count (dom/components s4))))
+      (let [s5 (dom/sys-capture s4 (dom/id m1) 1)]
+        (t/is (= 2 (dom/value (dom/get-component s5 (dom/id m2)) s5)))))))
 

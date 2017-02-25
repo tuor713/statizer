@@ -118,6 +118,19 @@
                         (with-meta max {:var 'clojure.core/max})
                         (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
 
+(defn weighted [weights]
+  (fn [& inputs]
+    (reduce + (map * inputs weights))))
+
+(defn make-weighted-signal
+  [sys name inputs weights]
+  (when-not (= (count inputs) (count weights))
+    (throw (IllegalArgumentException. (str "Number of inputs and weights does not match: "
+                                           inputs " " weights))))
+  (make-computed-signal sys name inputs
+                        (with-meta (weighted weights) {:var ['status.domain/weighted weights]})
+                        (t/fn-type (t/varargs-type [] t/TNumber) t/TNumber)))
+
 (defn sys-capture [sys id value]
   (let [meter (get-component sys id)
         new-meter (capture meter value)]

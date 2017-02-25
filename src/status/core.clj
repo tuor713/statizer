@@ -35,31 +35,26 @@
    (ref-set state (dom/new-system)))
   (future (save!)))
 
+(defn- add-component! [f]
+  (let [result (dosync
+                (let [[c sys] (f @state)]
+                  (ref-set state sys)
+                  c))]
+    (future (save!))
+    result))
+
 (defn add-meter!
   ([name] (add-meter! name type/TAny))
-  ([name type]
-   (let [result (dosync
-                 (let [[c sys] (dom/make-meter @state name type)]
-                   (ref-set state sys)
-                   c))]
-     (future (save!))
-     result)))
+  ([name type] (add-component! #(dom/make-meter % name type))))
 
 (defn add-min-signal! [name inputs]
-  (let [result (dosync
-                (let [[c sys] (dom/make-min-signal @state name inputs)]
-                  (ref-set state sys)
-                  c))]
-    (future (save!))
-    result))
+  (add-component! #(dom/make-min-signal % name inputs)))
 
 (defn add-max-signal! [name inputs]
-  (let [result (dosync
-                (let [[c sys] (dom/make-max-signal @state name inputs)]
-                  (ref-set state sys)
-                  c))]
-    (future (save!))
-    result))
+  (add-component! #(dom/make-max-signal % name inputs)))
+
+(defn add-weighted-signal! [name inputs weights]
+  (add-component! #(dom/make-weighted-signal % name inputs weights)))
 
 (defn capture! [id value]
   (dosync
@@ -156,6 +151,8 @@
   (add-meter! 'job.a type/TIndicator)
   (add-meter! 'job.b type/TIndicator)
   (add-min-signal! 'all.jobs [0 1])
+  (add-max-signal! 'any.job.passed [0 1])
+  (add-weighted-signal! 'jobs.weighted [0 1] [0.5 0.5])
   (capture! 0 0)
   (capture! 1 1))
 

@@ -36,7 +36,7 @@
                             inc))
         "Exception is triggered for creating a computed signal with inputs that don't exist"))
 
-(t/deftest test-predefined-signals
+(t/deftest test-min-max-signals
   (let [sys (sut/new-system)
         [m1 s1] (sut/make-meter sys 'a.signal type/TNumber)
         [m2 s2] (sut/make-meter s1 'b.siginal type/TNumber)
@@ -55,6 +55,25 @@
     (t/is (= 1 (sut/value imax (sut/sys-capture (sut/sys-capture s4 (sut/id m1) 0)
                                                 (sut/id m2)
                                                 1))))))
+
+(t/deftest test-weighted-signal
+  (let [sys (sut/new-system)
+        [m1 s1] (sut/make-meter sys 'a type/TNumber)
+        [m2 s2] (sut/make-meter s1 'b type/TNumber)
+        [m3 s3] (sut/make-meter sys 'any type/TAny)
+        [w s4] (sut/make-weighted-signal s2 'w [(sut/id m1) (sut/id m2)] [1 2])]
+    (t/is (thrown? Exception (sut/make-weighted-signal s3 'w [(sut/id m3)] [1]))
+          "Weighted signal requires numeric inputs")
+    (t/is (thrown? Exception (sut/make-weighted-signal s2 'w [(sut/id m1)] [0.5 0.5]))
+          "Weighted signal requires equal number of inputs and weights")
+    (t/is (nil? (sut/value w s4)))
+    (t/is (nil? (sut/value w (sut/sys-capture s4 (sut/id m1) 1))))
+    (t/is (= 0 (sut/value w (-> s4
+                                (sut/sys-capture (sut/id m1) 0)
+                                (sut/sys-capture (sut/id m2) 0)))))
+    (t/is (= 5 (sut/value w (-> s4
+                                (sut/sys-capture (sut/id m1) 1)
+                                (sut/sys-capture (sut/id m2) 2)))))))
 
 (t/deftest test-type-safety
   (let [sys (sut/new-system)
