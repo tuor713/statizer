@@ -13,19 +13,7 @@
 (defn edn-read [r]
   (with-open [r (java.io.PushbackReader. r)]
     (edn/read
-     {:readers {'meter (fn [v] (status.domain.InMemoryMeter. (:id v) (:name v) (:type v) []))
-                'computed (fn [v]
-                            (let [f-spec (:f v)
-                                  f (if (symbol? f-spec)
-                                      (var-get (resolve f-spec))
-                                      (apply (var-get (resolve (first f-spec))) (rest f-spec)))]
-                              (status.domain.ComputedSignal. (:id v)
-                                                             (:name v)
-                                                             (:inputs v)
-                                                             (with-meta f {:var f-spec})
-                                                             (:ftype v))))
-
-                'range-t (fn [v] (status.types.RangeType. (:type v) (:lower v) (:upper v)
+     {:readers {'range-t (fn [v] (status.types.RangeType. (:type v) (:lower v) (:upper v)
                                                           (:lower-inclusive? v)
                                                           (:upper-inclusive? v)))
                 'vector-t (fn [v] (status.types.VectorType. (:type v)))
@@ -42,8 +30,8 @@
     (save-system [_ system]
       (with-open [w (io/writer file)]
         (binding [*out* w]
-          (pr system))))
+          (pr @(:config-ref system)))))
 
     (load-system [_]
       (with-open [r (io/reader file)]
-        (edn-read r)))))
+        (dom/new-system (edn-read r))))))

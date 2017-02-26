@@ -1,5 +1,5 @@
 (defproject status "0.1.0-SNAPSHOT"
-  :dependencies [[org.clojure/clojure "1.8.0"]
+  :dependencies [[org.clojure/clojure "1.9.0-alpha14"]
                  [cheshire "5.5.0"]
 
                  [ring/ring-core "1.4.0"]

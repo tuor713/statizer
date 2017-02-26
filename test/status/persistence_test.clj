@@ -30,32 +30,53 @@
     (types/fn-type (types/tuple-type types/TNumber) types/TAny)))
 
 (t/deftest test-file-persistence
-  (let [sys (dom/new-system)
-        [m1 s1] (dom/make-meter sys 'a.job types/TAny)
-        s1-with-measurement (dom/sys-capture s1 (dom/id m1) 0)]
+  (let [sys (dom/new-system)]
+    (t/is (= @(:config-ref sys) @(:config-ref (fs-load (fs-save sys)))))
 
-    (t/is (= sys (fs-load (fs-save sys))))
-    (t/is (= s1 (fs-load (fs-save s1))))
-    (t/is (= s1 (fs-load (fs-save s1-with-measurement)))
-          "Measurements are not saved as part of the config")
+    (let [m1 (dom/create-component sys {::dom/name 'a.job ::dom/type types/TAny})]
+      (t/is (= @(:config-ref sys) @(:config-ref (fs-load (fs-save sys)))))
 
-    (let [s2 (second (dom/make-meter sys 'a.job types/TIndicator))]
-      (t/is (= s2 (fs-load (fs-save s2)))
+      (dom/capture sys m1 0)
+      (t/is (= @(:config-ref sys) @(:config-ref (fs-load (fs-save sys))))
+            "Measurements are not saved as part of the config")
+
+      (dom/create-component sys {::dom/name 'b.job ::dom/type types/TIndicator})
+      (t/is (= @(:config-ref sys) @(:config-ref (fs-load (fs-save sys))))
             "Serialize indicator (range) type"))
 
-    (let [[m1 s1] (dom/make-meter sys 'a.job types/TIndicator)
-          [_ s2] (dom/make-min-signal s1 'min.jobs [(dom/id m1)])
-          [_ s3] (dom/make-max-signal s1 'min.jobs [(dom/id m1)])]
-      (t/is (= 2 (count (dom/components (fs-load (fs-save s2)))))
-            "Serialize min computed signal")
-      (t/is (= 2 (count (dom/components (fs-load (fs-save s3)))))
-            "Serialize max computed signal"))
+    (let [sys (dom/new-system)
+          m1 (dom/create-component sys {::dom/name 'b.job ::dom/type types/TIndicator})
+          _ (dom/create-component
+             sys
+             {::dom/name 'min
+              ::dom/function {::dom/function-id :min
+                              ::dom/dependencies [m1]
+                              ::dom/type (types/fn-type (types/varargs-type [] types/TNumber)
+                                                        types/TNumber)}})
+          _ (dom/create-component
+             sys
+             {::dom/name 'max
+              ::dom/function {::dom/function-id :max
+                              ::dom/dependencies [m1]
+                              ::dom/type (types/fn-type (types/varargs-type [] types/TNumber)
+                                                        types/TNumber)}})]
+      (t/is (= 3 (count (dom/components (fs-load (fs-save sys)))))
+            "Serialize min & max computed signal"))
 
-    (let [[m1 s1] (dom/make-meter sys 'a types/TIndicator)
-          [m2 s2] (dom/make-weighted-signal s1 'w [(dom/id m1)] [2])
-          s3 (fs-load (fs-save s2))
-          s4 (dom/sys-capture s3 (dom/id m1) 1)]
-      (t/is (= 2 (count (dom/components s4))))
-      (let [s5 (dom/sys-capture s4 (dom/id m1) 1)]
-        (t/is (= 2 (dom/value (dom/get-component s5 (dom/id m2)) s5)))))))
+    (let [sys (dom/new-system)
+          m1 (dom/create-component sys {::dom/name 'm ::dom/type types/TIndicator})
+          w (dom/create-component
+             sys
+             {::dom/name 'w
+              ::dom/function {::dom/function-id :weighted
+                              ::dom/dependencies [m1]
+                              ::dom/parameters {::dom/weights [2]}
+                              ::dom/type (types/fn-type (types/varargs-type [] types/TNumber)
+                                                        types/TNumber)}})
+          sysB (fs-load (fs-save sys))]
+      (t/is (= 2 (count (dom/components sysB))))
+      (dom/capture sysB m1 1)
+
+      (t/is (nil? (dom/value sys w)))
+      (t/is (= 2 (dom/value sysB w))))))
 

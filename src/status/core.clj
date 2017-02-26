@@ -17,7 +17,7 @@
 
 ;; Commands & Queries
 
-(defonce state (ref (dom/new-system)))
+(defonce state (atom (dom/new-system)))
 (def persistence (atom nil))
 
 (defn save! []
@@ -31,34 +31,49 @@
        (ref-set state sys)))))
 
 (defn clear! []
-  (dosync
-   (ref-set state (dom/new-system)))
+  (reset! state (dom/new-system))
   (future (save!)))
 
 (defn- add-component! [f]
-  (let [result (dosync
-                (let [[c sys] (f @state)]
-                  (ref-set state sys)
-                  c))]
+  (let [result (f @state)]
     (future (save!))
     result))
 
 (defn add-meter!
   ([name] (add-meter! name type/TAny))
-  ([name type] (add-component! #(dom/make-meter % name type))))
+  ([name type] (add-component! #(dom/create-component % {::dom/name name
+                                                         ::dom/type type}))))
 
 (defn add-min-signal! [name inputs]
-  (add-component! #(dom/make-min-signal % name inputs)))
+  (add-component! #(dom/create-component
+                    %
+                    {::dom/name name
+                     ::dom/function {::dom/function-id :min
+                                     ::dom/dependencies inputs
+                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
+                                                              type/TNumber)}})))
 
 (defn add-max-signal! [name inputs]
-  (add-component! #(dom/make-max-signal % name inputs)))
+  (add-component! #(dom/create-component
+                    %
+                    {::dom/name name
+                     ::dom/function {::dom/function-id :max
+                                     ::dom/dependencies inputs
+                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
+                                                              type/TNumber)}})))
 
 (defn add-weighted-signal! [name inputs weights]
-  (add-component! #(dom/make-weighted-signal % name inputs weights)))
+  (add-component! #(dom/create-component
+                    %
+                    {::dom/name name
+                     ::dom/function {::dom/function-id :weighted
+                                     ::dom/dependencies inputs
+                                     ::dom/parameters {::dom/weights weights}
+                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
+                                                              type/TNumber)}})))
 
 (defn capture! [id value]
-  (dosync
-   (alter state dom/sys-capture id value)))
+  (dom/capture @state id value))
 
 ;; Web handlers
 
@@ -67,10 +82,10 @@
     (bootstrap/json-response
      (vec
       (sort-by :name
-               (for [[id comp] (dom/components ss)]
-                 {:id id
+               (for [comp (dom/components ss)]
+                 {:id (dom/id comp)
                   :name (dom/component-name comp)
-                  :value (dom/value comp ss)}))))))
+                  :value (dom/value ss (dom/id comp))}))))))
 
 (defn get-signal
   [req]
@@ -80,11 +95,8 @@
       (if-let [signal (dom/get-component @state id)]
         (bootstrap/json-response {:id id
                                   :name (dom/component-name signal)
-                                  :value (dom/value signal @state)
-                                  :dependencies
-                                  (if (satisfies? dom/Dependent signal)
-                                    (vec (dom/dependencies signal))
-                                    [])})
+                                  :value (dom/value @state id)
+                                  :dependencies (vec (dom/dependencies signal))})
         bootstrap/not-found))))
 
 (defn get-signal-full
@@ -93,25 +105,23 @@
     (if-let [signal (dom/get-component @state id)]
       (bootstrap/json-response {:id id
                                 :name (dom/component-name signal)
-                                :value (dom/value signal @state)
+                                :value (dom/value @state id)
                                 :dependencies
-                                (if (satisfies? dom/Dependent signal)
-                                  (mapv
-                                   (fn [id]
-                                     (let [s (dom/get-component @state id)
-                                           v (dom/value s @state)]
-                                       {:id id
-                                        :name (dom/component-name s)
-                                        :value v}))
-                                   (dom/dependencies signal))
-                                  [])})
+                                (mapv
+                                 (fn [id]
+                                   (let [s (dom/get-component @state id)
+                                         v (dom/value @state id)]
+                                     {:id id
+                                      :name (dom/component-name s)
+                                      :value v}))
+                                 (dom/dependencies signal))})
       bootstrap/not-found)))
 
 (defn get-signal-value
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
     (if-let [signal (dom/get-component @state id)]
-      (bootstrap/edn-response (dom/value signal @state))
+      (bootstrap/edn-response (dom/value @state id))
       bootstrap/not-found)))
 
 (defn add-measurement!
@@ -120,7 +130,7 @@
     (if-let [meter (dom/get-component @state id)]
       (do
         (capture! id (edn/read-string (ring-req/body-string req)))
-        (bootstrap/edn-response (dom/value (dom/get-component @state id) @state)))
+        (bootstrap/edn-response (dom/value @state id)))
       bootstrap/not-found)))
 
 (defroutes routes

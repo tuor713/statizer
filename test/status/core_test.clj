@@ -14,8 +14,10 @@
   (apply str "http://localhost:" test-port elements))
 
 (t/use-fixtures
-  :once (fn [f] (let [service (sut/run-dev test-port)]
+  :once (fn [f] (let [prior-state @sut/state
+                      service (sut/run-dev test-port)]
                   (f)
+                  (reset! sut/state prior-state)
                   (sut/stop-dev service))))
 
 (t/use-fixtures
@@ -46,7 +48,7 @@
               :throw-exceptions false}))
 
 (t/deftest test-signal-get
-  (let [id (dom/id (sut/add-meter! 'a/signal))]
+  (let [id (sut/add-meter! 'a/signal)]
     (sut/capture! id 1)
     (t/is (returns? "1" (get-signal-value id)))
 
@@ -56,17 +58,17 @@
         "Requesting a non-existing signal gives 404 status"))
 
 (t/deftest test-signal-post-get
-  (let [id (dom/id (sut/add-meter! 'a/signal))]
+  (let [id (sut/add-meter! 'a/signal)]
     (t/is (ok? (post-value id 2)))
     (t/is (returns? "2" (get-signal-value id))))
 
   (t/is (not-found? (post-value 12345 2))))
 
 (t/deftest test-min-max-get
-  (let [a-id (dom/id (sut/add-meter! 'a.signal type/TNumber))
-        b-id (dom/id (sut/add-meter! 'b.signal type/TNumber))
-        c-id (dom/id (sut/add-min-signal! 'min [a-id b-id]))
-        d-id (dom/id (sut/add-max-signal! 'max [a-id b-id]))]
+  (let [a-id (sut/add-meter! 'a.signal type/TNumber)
+        b-id (sut/add-meter! 'b.signal type/TNumber)
+        c-id (sut/add-min-signal! 'min [a-id b-id])
+        d-id (sut/add-max-signal! 'max [a-id b-id])]
     (t/is (ok? (post-value a-id 0)))
     (t/is (ok? (post-value b-id 1)))
     (t/is (returns? "0" (get-signal-value c-id)))
