@@ -27,8 +27,7 @@
 (defn load! []
   (when @persistence
     (let [sys (persist/load-system @persistence)]
-      (dosync
-       (ref-set state sys)))))
+      (reset! state sys))))
 
 (defn clear! []
   (reset! state (dom/new-system))
