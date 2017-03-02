@@ -1,5 +1,8 @@
 # Statizer
 
+
+[![Build Status](https://travis-ci.org/tuor713/statizer.svg?branch=master)](https://travis-ci.org/tuor713/statizer.svg?branch=master)
+
 A status tracking, alerting and data quality monitoring service. This is very raw and may not 
 shape out too much.
 
