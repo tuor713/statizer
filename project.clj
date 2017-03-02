@@ -1,4 +1,5 @@
 (defproject status "0.1.0-SNAPSHOT"
+  :plugins [[lein-cloverage "1.0.9"]]
   :dependencies [[org.clojure/clojure "1.9.0-alpha14"]
                  [cheshire "5.5.0"]
 
