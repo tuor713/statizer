@@ -1,5 +1,6 @@
 (ns status.core
   (:require [clojure.edn :as edn]
+            [clojure.walk :as walk]
 
             [io.pedestal.http :as bootstrap]
             [io.pedestal.http.route :as route]
@@ -13,7 +14,8 @@
 
             [status.types :as type]
             [status.domain :as dom]
-            [status.persistence :as persist]))
+            [status.persistence :as persist]
+            [cheshire.core :as json]))
 
 ;; Commands & Queries
 
@@ -132,6 +134,23 @@
         (bootstrap/edn-response (dom/value @state id)))
       bootstrap/not-found)))
 
+(defn- parse-json-ext
+  "Parse JSON with the transit-style extension for keywords"
+  [s]
+  (walk/postwalk
+   (fn [v]
+     (if (and (string? v)
+              (re-matches #"~:.*" v))
+       (keyword (subs v 2))
+       v))
+   (json/parse-string s)))
+
+(defn create-signal
+  [req]
+  (let [spec (parse-json-ext (ring-req/body-string req))
+        id (add-component! #(dom/create-component % spec))]
+    (bootstrap/edn-response id)))
+
 (defroutes routes
   [[["/api/signal/:id"
      {:get get-signal}]
@@ -145,7 +164,8 @@
     ["/api/meter/:id/value"
      {:post add-measurement!}]
 
-    ]])
+    ["/api/signal"
+     {:post create-signal}]]])
 
 (def service {:env :prod
               ::bootstrap/routes routes

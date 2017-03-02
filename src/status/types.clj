@@ -11,11 +11,16 @@
 (def TNumber ::number)
 
 (derive ::number ::any)
+(declare aliases)
 
 (defrecord RangeType [type lower upper lower-inclusive? upper-inclusive?]
   Type
-  (substitutes? [_ other]
-    (if (instance? RangeType other)
+  (substitutes? [self other]
+    (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
+      (instance? RangeType other)
       (and (substitutes? type (:type other))
            (or (< lower (:lower other))
                (and (= lower (:lower other))
@@ -25,6 +30,8 @@
                (and (= upper (:upper other))
                     (or upper-inclusive?
                         (not (:upper-inclusive? other))))))
+
+      :else
       false))
 
   Object
@@ -49,12 +56,16 @@
   ([type lower upper lower-inclusive? upper-inclusive?]
    (RangeType. type lower upper lower-inclusive? upper-inclusive?)))
 
-(def TIndicator (range-type 0 1))
-
 (extend-protocol Type
   clojure.lang.Keyword
   (substitutes? [self other]
     (cond
+      (contains? aliases self)
+      (substitutes? (aliases self) other)
+
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
       (= self ::any)
       true
 
@@ -66,9 +77,15 @@
 
 (defrecord VectorType [type]
   Type
-  (substitutes? [_ other]
-    (if (instance? VectorType other)
+  (substitutes? [self other]
+    (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
+      (instance? VectorType other)
       (substitutes? type (:type other))
+
+      :else
       false))
 
   Object
@@ -89,9 +106,15 @@
 
 (defrecord TupleType [types]
   Type
-  (substitutes? [_ other]
-    (if (instance? TupleType other)
+  (substitutes? [self other]
+    (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
+      (instance? TupleType other)
       (substitute-all? types (:types other))
+
+      :else
       false))
 
   Object
@@ -107,8 +130,11 @@
 
 (defrecord Varargs [types var-type]
   Type
-  (substitutes? [_ other]
+  (substitutes? [self other]
     (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
       (instance? TupleType other)
       (and (<= (count types) (count (:types other)))
            (substitute-all? types (take (count types) (:types other)))
@@ -140,10 +166,16 @@
 
 (defrecord FunctionType [domain range]
   Type
-  (substitutes? [_ other]
-    (if (instance? FunctionType other)
+  (substitutes? [self other]
+    (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
+      (instance? FunctionType other)
       (and (substitutes? (:domain other) domain)
            (substitutes? range (:range other)))
+
+      :else
       false))
 
   Object
@@ -167,4 +199,11 @@
 
 (defn fn-applicable? [ftype input-type]
   (substitutes? (fn-domain ftype) input-type))
+
+(def aliases
+  {::indicator (range-type 0 1)
+   ::number*->number (fn-type (varargs-type [] ::number) ::number)
+   ::indicator*->indicator (fn-type (varargs-type [] ::indicator) ::indicator)})
+
+(def TIndicator ::indicator)
 

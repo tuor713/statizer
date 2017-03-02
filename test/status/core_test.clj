@@ -21,7 +21,7 @@
                   (sut/stop-dev service))))
 
 (t/use-fixtures
-  :each (fn [f] (f) (sut/clear!)))
+  :each (fn [f] (sut/clear!) (f)))
 
 (defn- ok? [resp] (= 200 (:status resp)))
 (defn- not-found? [resp] (= 404 (:status resp)))
@@ -45,6 +45,11 @@
 (defn post-value [id value]
   (http/post (url "/api/meter/" id "/value")
              {:body (pr-str value)
+              :throw-exceptions false}))
+
+(defn post-signal [spec]
+  (http/post (url "/api/signal")
+             {:body spec
               :throw-exceptions false}))
 
 (t/deftest test-signal-get
@@ -73,6 +78,14 @@
     (t/is (ok? (post-value b-id 1)))
     (t/is (returns? "0" (get-signal-value c-id)))
     (t/is (returns? "1" (get-signal-value d-id)))))
+
+(t/deftest test-create-signal
+  (let [res (post-signal "{\"~:status.domain/name\":\"a\",
+                          \"~:status.domain/type\":\"~:status.types/number\"}")
+        id (:body res)]
+    (t/is (returns? "0" res))
+    (t/is (json? {:name "a" :id 0 :dependencies [] :value nil}
+                 (get-signal id)))))
 
 
 

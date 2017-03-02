@@ -89,3 +89,9 @@
                                  (sut/tuple-type sut/TAny sut/TAny))))
   (t/is (not (sut/fn-applicable? (sut/fn-type (sut/tuple-type sut/TAny sut/TAny) sut/TAny)
                                  (sut/tuple-type sut/TAny)))))
+
+(t/deftest test-aliases
+  (t/is (equiv? ::sut/number*->number
+                (sut/fn-type (sut/varargs-type [] sut/TNumber) sut/TNumber)))
+  (t/is (equiv? ::sut/indicator*->indicator
+                (sut/fn-type (sut/varargs-type [] sut/TIndicator) sut/TIndicator))))
