@@ -9,6 +9,8 @@
 
                  [hiccup "1.0.5"]
 
+                 [com.taoensso/timbre "4.8.0"]
+
                  [io.pedestal/pedestal.jetty "0.4.1"]
                  [io.pedestal/pedestal.service "0.4.1"]
                  [io.pedestal/pedestal.service-tools "0.4.1"]])

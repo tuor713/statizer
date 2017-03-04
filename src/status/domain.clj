@@ -3,7 +3,9 @@
   (:require [status.types :as t]
             [clojure.spec :as spec]
             [clojure.string :as s]
-            
+
+            [taoensso.timbre :as log]
+
             [clojurewerkz.quartzite.scheduler :as sched]
             [clojurewerkz.quartzite.jobs :as job]
             [clojurewerkz.quartzite.triggers :as trig]
@@ -129,9 +131,10 @@
 (job/defjob PullJob
   [ctx]
   (let [m (qc/from-job-data ctx)
+        job (m "job")
         url (m "url")
         value (m "atom")]
-    
+    (log/info "Retrieving job" job "from" url)
     (reset! value (slurp url))))
 
 (defn- component-value [spec scheduler]
@@ -151,7 +154,8 @@
             val (atom (or initial default))
             job (job/build
                  (job/of-type PullJob)
-                 (job/using-job-data {"url" (get-in spec [::source ::url])
+                 (job/using-job-data {"job" (str "job." (::id spec))
+                                      "url" (get-in spec [::source ::url])
                                       "atom" val})
                  (job/with-identity (job/key (str "job." (::id spec)))))
             trigger (trig/build
