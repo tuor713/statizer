@@ -1,7 +1,14 @@
 (ns status.domain
   "Domain model for status application"
   (:require [status.types :as t]
-            [clojure.spec :as spec]))
+            [clojure.spec :as spec]
+            [clojure.string :as s]
+            
+            [clojurewerkz.quartzite.scheduler :as sched]
+            [clojurewerkz.quartzite.jobs :as job]
+            [clojurewerkz.quartzite.triggers :as trig]
+            [clojurewerkz.quartzite.conversion :as qc]
+            [clojurewerkz.quartzite.schedule.simple :as qsimple]))
 
 ;; Specs for data in the system
 
@@ -26,13 +33,35 @@
 (spec/def ::measurement (spec/keys :req [::timestamp ::value]))
 (spec/def ::measurements (spec/map-of ::id (spec/* ::measurement)))
 
+(spec/def ::url string?)
+
+(defmulti schedule-type ::schedule-type)
+(defmethod schedule-type ::simple [_]
+  (spec/keys :req [::interval-in-ms]))
+(spec/def ::schedule (spec/multi-spec schedule-type ::schedule-type))
+
+(defmulti source-type ::source-type)
+(defmethod source-type ::url-source [_]
+  (spec/keys :req [::source-type
+                   ::url
+                   ::schedule]))
+(defmethod source-type ::push [_]
+  (spec/keys :req [::source-type]))
+
+(spec/def ::source (spec/multi-spec source-type ::source-type))
+
 (spec/def ::component-spec (spec/keys :req [::name
                                             (or ::type ::function)]
-                                      :opt [::default-value]))
+                                      :opt [::default-value
+                                            ::source]))
+(spec/def ::component-type #{::push
+                             ::pull
+                             ::computed})
 (spec/def ::component (spec/keys :req [::id
                                        ::name
                                        (or ::type ::function)]
-                                 :opt [::default-value]))
+                                 :opt [::default-value
+                                       ::source]))
 
 (spec/def ::next-id ::id)
 (spec/def ::components (spec/map-of ::id ::component))
@@ -97,9 +126,18 @@
       (v state)
       v)))
 
-(defn- component-value [spec]
+(job/defjob PullJob
+  [ctx]
+  (let [m (qc/from-job-data ctx)
+        url (m "url")
+        value (m "atom")]
+    
+    (reset! value (slurp url))))
+
+(defn- component-value [spec scheduler]
   (let [default (::default-value spec)]
-    (if (derived? spec)
+    (cond
+      (derived? spec)
       (let [f (component-function spec)]
         (fn [state]
           (or (let [vals (map (partial get-value state)
@@ -107,6 +145,28 @@
                 (when (every? #(not= nil %) vals)
                   (apply f vals)))
               default)))
+
+      (= ::url-source (get-in spec [::source ::source-type]))
+      (let [initial (slurp (get-in spec [::source ::url]))
+            val (atom (or initial default))
+            job (job/build
+                 (job/of-type PullJob)
+                 (job/using-job-data {"url" (get-in spec [::source ::url])
+                                      "atom" val})
+                 (job/with-identity (job/key (str "job." (::id spec)))))
+            trigger (trig/build
+                     (trig/with-identity (trig/key (str "trigger." (::id spec))))
+                     (trig/start-now)
+                     (trig/with-schedule
+                       (qsimple/schedule
+                        (qsimple/with-misfire-handling-instruction-now-with-existing-count)
+                        (qsimple/repeat-forever)
+                        (qsimple/with-interval-in-milliseconds
+                          (get-in spec [::source ::schedule ::interval-in-ms])))))]
+        (sched/schedule scheduler job trigger)
+        (fn [_] @val))
+
+      :else
       default)))
 
 (defn- validate-component [cfg spec]
@@ -121,7 +181,7 @@
 
       (validate-function-spec (::function spec)))))
 
-(defrecord InMemoryStatusSystem [config-ref state-ref]
+(defrecord InMemoryStatusSystem [config-ref state-ref scheduler]
   StatusSystem
   (create-component [self spec]
     (validate-component @config-ref spec)
@@ -133,7 +193,7 @@
                     (assoc-in [::components id] (assoc spec ::id id))
                     (assoc ::next-id (inc id)))))
        (alter state-ref
-              assoc-in [::values id] (component-value spec))
+              assoc-in [::values id] (component-value spec scheduler))
        id)))
 
   (get-component [self id]
@@ -159,18 +219,23 @@
     (get-value @state-ref id))
 
   (measurements [self id]
-    (get-in @state-ref [::measurements id])))
+    (get-in @state-ref [::measurements id]))
+
+  java.io.Closeable
+  (close [self]
+    (sched/shutdown scheduler)))
 
 (defn new-system
   ([] (new-system {::next-id 0 ::components {}}))
   ([cfg]
-   (let [sys (InMemoryStatusSystem. (ref {::next-id 0 ::components {}})
-                                    (ref {::measurements {} ::values {}}))]
+   (let [scheduler (sched/initialize)
+         sys (InMemoryStatusSystem. (ref {::next-id 0 ::components {}})
+                                    (ref {::measurements {} ::values {}})
+                                    scheduler)]
+     (sched/start scheduler)
      (doseq [c (sort-by id (vals (::components cfg)))]
        (create-component sys c))
      sys)))
-
-
 
 (defn merge-systems [sys1 sys2]
   (first
