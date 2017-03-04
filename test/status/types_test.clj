@@ -52,6 +52,8 @@
   (t/is (below? (sut/tuple-type sut/TAny sut/TAny) (sut/tuple-type sut/TAny sut/TNumber)))
   (t/is (not (sut/substitutes? (sut/tuple-type sut/TNumber sut/TAny) (sut/tuple-type sut/TAny sut/TNumber))))
   (t/is (incompatible? (sut/tuple-type sut/TAny) (sut/tuple-type sut/TAny sut/TAny)))
+  (t/is (incompatible? (sut/tuple-type sut/TAny) sut/TNumber))
+  (t/is (incompatible? (sut/tuple-type sut/TAny) (sut/range-type 0 1)))
 
   (t/testing "Varargs"
     (t/is (below? (sut/varargs-type [sut/TAny sut/TAny] sut/TAny)
@@ -61,7 +63,8 @@
     (t/is (below? (sut/varargs-type [sut/TAny sut/TAny] sut/TAny)
                   (sut/varargs-type [sut/TAny sut/TAny] sut/TNumber)))
     (t/is (below? (sut/varargs-type [sut/TAny sut/TAny] sut/TAny)
-                  (sut/varargs-type [sut/TAny sut/TAny sut/TAny] sut/TAny)))))
+                  (sut/varargs-type [sut/TAny sut/TAny sut/TAny] sut/TAny)))
+    (t/is (incompatible? sut/TNumber (sut/varargs-type [sut/TAny sut/TAny] sut/TAny)))))
 
 (t/deftest test-function-types
   (t/is (below? sut/TAny (sut/fn-type (sut/tuple-type) sut/TAny)))
@@ -76,6 +79,7 @@
 
   (t/is (incompatible? (sut/fn-type (sut/tuple-type sut/TAny) sut/TAny)
                        (sut/fn-type (sut/tuple-type sut/TAny sut/TAny) sut/TAny)))
+  (t/is (incompatible? (sut/fn-type (sut/tuple-type sut/TAny) sut/TAny) sut/TNumber))
 
   (t/is (equiv? sut/TAny (sut/fn-range (sut/fn-type (sut/tuple-type sut/TAny) sut/TAny))))
   (t/is (equiv? (sut/tuple-type sut/TAny)
