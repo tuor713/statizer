@@ -8,7 +8,9 @@
 (t/deftest test-error-checking
   (with-open [sys (sut/new-system)]
     (t/is (thrown? Exception (sut/capture sys 0 0))
-          "Can't capture value for non-existing component")))
+          "Can't capture value for non-existing component")
+
+    (t/is (thrown? Exception (sut/create-component sys {::sut/type type/TAny})))))
 
 (t/deftest test-specs
   (t/is (spec/valid? ::sut/component
@@ -57,6 +59,10 @@
       (let [c (sut/get-component sys m)]
         (t/is (not (sut/derived? c)))
         (t/is (= 'a (sut/component-name c)))))))
+
+(t/deftest test-plain-keyword-support
+  (with-open [sys (sut/new-system)]
+    (let [m (sut/create-component sys {:name 'a :type type/TAny})])))
 
 (t/deftest test-min-max-signals
   (with-open [sys (sut/new-system)]

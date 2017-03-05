@@ -3,6 +3,7 @@
   (:require [status.types :as t]
             [clojure.spec :as spec]
             [clojure.string :as s]
+            [clojure.walk :as walk]
 
             [taoensso.timbre :as log]
 
@@ -25,7 +26,7 @@
 (spec/def ::type #(satisfies? t/Type %))
 
 (spec/def ::dependencies (spec/* ::id))
-(spec/def ::function-id #{:min :max :weighted})
+(spec/def ::function-id #{::min ::max ::weighted})
 (spec/def ::function (spec/keys :req [::function-id
                                       ::dependencies
                                       ::type]
@@ -35,7 +36,7 @@
 (spec/def ::measurement (spec/keys :req [::timestamp ::value]))
 (spec/def ::measurements (spec/map-of ::id (spec/* ::measurement)))
 
-(spec/def ::url string?)
+(spec/def ::url #(or (string? %) (instance? java.net.URL %)))
 
 (defmulti schedule-type ::schedule-type)
 (defmethod schedule-type ::simple [_]
@@ -106,16 +107,16 @@
   (measurements [self id] "Get list of measurements for component"))
 
 (defmulti component-function #(get-in % [::function ::function-id]))
-(defmethod component-function :min [spec] min)
-(defmethod component-function :max [spec] max)
-(defmethod component-function :weighted [spec]
+(defmethod component-function ::min [spec] min)
+(defmethod component-function ::max [spec] max)
+(defmethod component-function ::weighted [spec]
   (let [weights (get-in spec [::function ::parameters ::weights])]
     (fn [& inputs]
       (reduce + (map * inputs weights)))))
 
 (defmulti validate-function-spec #(get-in % [::function-id]))
 (defmethod validate-function-spec :default [spec] true)
-(defmethod validate-function-spec :weighted [fspec]
+(defmethod validate-function-spec ::weighted [fspec]
   (when-not (= (count (::dependencies fspec))
                (count (get-in fspec [::parameters ::weights])))
     (throw (IllegalArgumentException. (str "Number of inputs and weights does not match: "
@@ -174,6 +175,9 @@
       default)))
 
 (defn- validate-component [cfg spec]
+  (when-not (spec/valid? ::component-spec spec)
+    (throw (Exception. (str "Invalid component definition:\n"
+                            (spec/explain-str ::component-spec spec)))))
   (when (derived? spec)
     (let [ftype (get-in spec [::function ::type])
           arg-types (apply t/tuple-type (map #(typ (get-in cfg [::components %]))
@@ -185,20 +189,30 @@
 
       (validate-function-spec (::function spec)))))
 
+(defn- namespacetize [spec]
+  (walk/postwalk
+   (fn [v]
+     (if (and (keyword? v)
+              (nil? (namespace v)))
+       (keyword "status.domain" (name v))
+       v))
+   spec))
+
 (defrecord InMemoryStatusSystem [config-ref state-ref scheduler]
   StatusSystem
   (create-component [self spec]
-    (validate-component @config-ref spec)
-    (dosync
-     (let [id (::next-id @config-ref)]
-       (alter config-ref
-              (fn [cfg]
-                (-> cfg
-                    (assoc-in [::components id] (assoc spec ::id id))
-                    (assoc ::next-id (inc id)))))
-       (alter state-ref
-              assoc-in [::values id] (component-value spec scheduler))
-       id)))
+    (let [spec (namespacetize spec)]
+      (validate-component @config-ref spec)
+      (dosync
+       (let [id (::next-id @config-ref)]
+         (alter config-ref
+                (fn [cfg]
+                  (-> cfg
+                      (assoc-in [::components id] (assoc spec ::id id))
+                      (assoc ::next-id (inc id)))))
+         (alter state-ref
+                assoc-in [::values id] (component-value spec scheduler))
+         id))))
 
   (get-component [self id]
     (get-in @config-ref [::components id]))
