@@ -13,6 +13,11 @@
 (derive ::number ::any)
 (declare aliases)
 
+(defn- a2t
+  "Resolve aliases to full types"
+  [t]
+  (get aliases t t))
+
 (defrecord RangeType [type lower upper lower-inclusive? upper-inclusive?]
   Type
   (substitutes? [self other]
@@ -192,10 +197,10 @@
   (FunctionType. domain range))
 
 (defn fn-range [ftype]
-  (:range ftype))
+  (:range (a2t ftype)))
 
 (defn fn-domain [ftype]
-  (:domain ftype))
+  (:domain (a2t ftype)))
 
 (defn fn-applicable? [ftype input-type]
   (substitutes? (fn-domain ftype) input-type))

@@ -98,4 +98,8 @@
   (t/is (equiv? ::sut/number*->number
                 (sut/fn-type (sut/varargs-type [] sut/TNumber) sut/TNumber)))
   (t/is (equiv? ::sut/indicator*->indicator
-                (sut/fn-type (sut/varargs-type [] sut/TIndicator) sut/TIndicator))))
+                (sut/fn-type (sut/varargs-type [] sut/TIndicator) sut/TIndicator)))
+  (t/is (= sut/TNumber
+           (sut/fn-range ::sut/number*->number)))
+  (t/is (equiv? (sut/varargs-type [] sut/TNumber)
+                (sut/fn-domain ::sut/number*->number))))
