@@ -3,7 +3,10 @@
             [status.types :as type]
             [clojure.java.io :as io]
             [clojure.spec :as spec]
-            [clojure.test :as t]))
+            [clojure.test :as t]
+
+            [clojurewerkz.quartzite.scheduler :as sched]
+            [clojurewerkz.quartzite.jobs :as job]))
 
 (t/deftest test-error-checking
   (with-open [sys (sut/new-system)]
@@ -123,26 +126,84 @@
                        (-> config
                            (assoc-in [:function :missing-policy] :default-input)
                            (assoc-in [:function :default-value] 0)))]
-      (t/is (nil? (sut/value sys min)))
-      (t/is (= 0 (sut/value sys min-with-default)))
-      (t/is (nil? (sut/value sys min-ignore)))
-      (t/is (= 0 (sut/value sys min-default)))
+      (t/are [c v] (= (sut/value sys c) v)
+        min nil
+        min-with-default 0
+        min-ignore nil
+        min-default 0)
 
       (sut/capture sys m1 -1)
-      (t/is (nil? (sut/value sys min)))
-      (t/is (= 0 (sut/value sys min-with-default)))
-      (t/is (= -1 (sut/value sys min-ignore)))
-      (t/is (= -1 (sut/value sys min-default)))
+      (t/are [c v] (= (sut/value sys c) v)
+        min nil
+        min-with-default 0
+        min-ignore -1
+        min-default -1)
 
       (sut/capture sys m1 1)
       (t/is (= 1 (sut/value sys min-ignore)))
       (t/is (= 0 (sut/value sys min-default)))
 
       (sut/capture sys m2 2)
-      (t/is (= 1 (sut/value sys min)))
-      (t/is (= 1 (sut/value sys min-with-default)))
-      (t/is (= 1 (sut/value sys min-ignore)))
-      (t/is (= 1 (sut/value sys min-default))))))
+      (t/are [c v] (= (sut/value sys c) v)
+        min 1
+        min-with-default 1
+        min-ignore 1
+        min-default 1))))
+
+(t/deftest test-updating-components
+  (with-open [sys (sut/new-system)]
+    (t/testing "Updating type of basic component"
+      (let [m1 (sut/create-component sys {:name 'a :type type/TAny})
+            min-cfg {:name 'min
+                     :function {:function-id :min
+                                :type ::type/number*->number
+                                :dependencies [m1]}}]
+        (t/is (thrown? Exception (sut/create-component sys min-cfg)))
+        (sut/update-component sys m1 {:name 'a :type type/TNumber})
+        (t/is (number? (sut/create-component sys min-cfg)))))
+
+    (t/testing "Updating simple component resets the value"
+      (let [m (sut/create-component sys {:name 'a :type type/TAny})]
+        (sut/capture sys m 1)
+        (t/is (= 1 (sut/value sys m)))
+        (sut/update-component sys m {:name 'b :type type/TNumber})
+        (t/is (nil? (sut/value sys m)))))
+
+    (t/testing "Updating changes computed component function"
+      (let [m1 (sut/create-component sys {:name 'a :type type/TNumber})
+            m2 (sut/create-component sys {:name 'b :type type/TNumber})
+            min (sut/create-component sys {:name 'f
+                                           :function {:function-id :min
+                                                      :type ::type/number*->number
+                                                      :dependencies [m1 m2]}})]
+        (sut/capture sys m1 0)
+        (sut/capture sys m2 1)
+        (t/is (= 0 (sut/value sys min)))
+
+        (sut/update-component sys min {:name 'f
+                                       :function {:function-id :max
+                                                  :type ::type/number*->number
+                                                  :dependencies [m1 m2]}})
+        (t/is (= 1 (sut/value sys min)))))
+
+    (t/testing "Updating from pull to push removes scheduling"
+      (let [tf (io/file ".status.test")]
+        (try
+          (spit tf "1")
+          (let [c (sut/create-component
+                   sys
+                   {::sut/name 'pull
+                    ::sut/type type/TAny
+                    ::sut/source {::sut/source-type ::sut/url-source
+                                  ::sut/url (.toURL tf)
+                                  ::sut/schedule {::sut/schedule-type ::sut/simple
+                                                  ::sut/interval-in-ms 100}}})]
+            (t/is (not (nil? (sched/get-job (:scheduler sys) (job/key (str "job." c))))))
+            (t/is (= "1" (sut/value sys c)))
+            (sut/update-component sys c {:name 'push :type type/TAny})
+            (t/is (nil? (sched/get-job (:scheduler sys) (job/key (str "job." c))))))
+          (finally
+            (.delete tf)))))))
 
 (t/deftest test-weighted-signal
   (let [sys (sut/new-system)

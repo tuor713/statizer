@@ -52,6 +52,11 @@
              {:body spec
               :throw-exceptions false}))
 
+(defn put-signal [id spec]
+  (http/put (url (str "/api/signal/" id))
+            {:body spec
+             :throw-exceptions false}))
+
 (t/deftest test-signal-get
   (let [id (sut/add-meter! 'a/signal)]
     (sut/capture! id 1)
@@ -86,6 +91,17 @@
     (t/is (returns? "0" res))
     (t/is (json? {:name "a" :id 0 :dependencies [] :value nil}
                  (get-signal id)))))
+
+(t/deftest test-update-signal
+  (let [res (post-signal "{\"~:name\":\"a\", \"~:type\":\"~:status.types/number\"}")
+        id (:body res)]
+    (t/is (returns? "0" res))
+    (t/is (json? {:name "a" :id 0 :dependencies [] :value nil}
+                 (get-signal id)))
+    (let [r2 (put-signal id "{\"~:name\":\"b\", \"~:type\":\"~:status.types/number\"}")]
+      (t/is (ok? r2))
+      (t/is (json? {:name "b" :id 0 :dependencies [] :value nil}
+                   (get-signal id))))))
 
 
 

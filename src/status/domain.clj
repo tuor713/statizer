@@ -100,9 +100,16 @@
       (t/fn-range (get-in self [::function ::type]))
       (::type self))))
 
+(defprotocol Signal
+  (get-value [self state])
+  (add-value [self value])
+  (history [self])
+  (dispose [self]))
+
 ;; Read-write interface
 (defprotocol StatusSystem
   (create-component [self spec] "Returns id of component created")
+  (update-component [self id spec] "Update component")
   (get-component [self id] "Returns the component spec")
   (components [self] "Get all components")
   (capture [self id value] "Adds a new measurement")
@@ -126,12 +133,6 @@
                                            (::dependencies fspec)
                                            " " (get-in fspec [::parameters ::weights]))))))
 
-(defn- get-value [state id]
-  (if-let [v (get-in state [::values id])]
-    (if (fn? v)
-      (v state)
-      v)))
-
 (job/defjob PullJob
   [ctx]
   (let [m (qc/from-job-data ctx)
@@ -141,6 +142,20 @@
     (log/info "Retrieving job" job "from" url)
     (reset! value (slurp url))))
 
+(defrecord FnValue [f]
+  Signal
+  (get-value [_ state] (f state))
+  (add-value [_ _] (throw (UnsupportedOperationException. "Can't set value on computed signal.")))
+  (history [_] (throw (UnsupportedOperationException. "Measurements not supported for computed signal.")))
+  (dispose [_]))
+
+(defrecord PureValue [v history]
+  Signal
+  (get-value [_ _] v)
+  (add-value [_ vnew] (PureValue. vnew (conj history {::value v ::timestamp (System/currentTimeMillis)})))
+  (history [_] history)
+  (dispose [_]))
+
 (defn- component-value [spec scheduler]
   (let [default (::default-value spec)]
     (cond
@@ -148,37 +163,41 @@
       (let [f (component-function spec)
             policy (get-in spec [::function ::missing-policy] ::default-result)
             dependencies (get-in spec [::function ::dependencies])
-            deps #(map (partial get-value %) dependencies)]
+            deps #(map (fn [id] (get-value (get % id) %)) dependencies)]
         (cond
           (= policy ::default-result)
-          (fn [state]
-            (or (let [vals (deps state)]
-                  (when (every? #(not= nil %) vals)
-                    (apply f vals)))
-                default))
+          (FnValue.
+           (fn [state]
+             (or (let [vals (deps state)]
+                   (when (every? #(not= nil %) vals)
+                     (apply f vals)))
+                 default)))
 
           (= policy ::default-input)
           (let [dv (get-in spec [::function ::default-value])]
-            (fn [state]
-              (or (apply f (map #(or % dv) (deps state)))
-                  default)))
+            (FnValue.
+             (fn [state]
+               (or (apply f (map #(or % dv) (deps state)))
+                   default))))
 
           (= policy ::ignore-value)
-          (fn [state]
-            (or (let [vals (remove nil? (deps state))]
-                  (when (seq vals)
-                    (apply f vals)))
-                default))))
+          (FnValue.
+           (fn [state]
+             (or (let [vals (remove nil? (deps state))]
+                   (when (seq vals)
+                     (apply f vals)))
+                 default)))))
 
       (= ::url-source (get-in spec [::source ::source-type]))
       (let [initial (slurp (get-in spec [::source ::url]))
             val (atom (or initial default))
+            jkey (job/key (str "job." (::id spec)))
             job (job/build
                  (job/of-type PullJob)
                  (job/using-job-data {"job" (str "job." (::id spec))
                                       "url" (get-in spec [::source ::url])
                                       "atom" val})
-                 (job/with-identity (job/key (str "job." (::id spec)))))
+                 (job/with-identity jkey))
             trigger (trig/build
                      (trig/with-identity (trig/key (str "trigger." (::id spec))))
                      (trig/start-now)
@@ -189,10 +208,19 @@
                         (qsimple/with-interval-in-milliseconds
                           (get-in spec [::source ::schedule ::interval-in-ms])))))]
         (sched/schedule scheduler job trigger)
-        (fn [_] @val))
+        (reify Signal
+          (get-value [_ _] @val)
+          (add-value [_ _] (throw (UnsupportedOperationException. "Can't set value on a pull signal")))
+          (history [_] (throw (UnsupportedOperationException. "Can't set value on a pull signal")))
+          (dispose [_]
+            (sched/delete-job scheduler jkey))))
 
       :else
-      default)))
+      (PureValue.
+       default
+       (if (nil? default)
+         []
+         [{::value default ::timestamp (System/currentTimeMillis)}])))))
 
 (defn- validate-component [cfg spec]
   (when-not (spec/valid? ::component-spec spec)
@@ -224,15 +252,25 @@
     (let [spec (namespacetize spec)]
       (validate-component @config-ref spec)
       (dosync
-       (let [id (::next-id @config-ref)]
+       (let [id (::next-id @config-ref)
+             component (assoc spec ::id id)]
          (alter config-ref
                 (fn [cfg]
                   (-> cfg
-                      (assoc-in [::components id] (assoc spec ::id id))
+                      (assoc-in [::components id] component)
                       (assoc ::next-id (inc id)))))
          (alter state-ref
-                assoc-in [::values id] (component-value spec scheduler))
+                assoc id (component-value component scheduler))
          id))))
+
+  (update-component [self id spec]
+    (let [spec (namespacetize spec)
+          _ (validate-component @config-ref spec)
+          spec (assoc spec ::id id)]
+      (dosync
+       (alter config-ref assoc-in [::components id] spec)
+       (dispose (get @state-ref id))
+       (alter state-ref assoc id (component-value spec scheduler)))))
 
   (get-component [self id]
     (get-in @config-ref [::components id]))
@@ -247,17 +285,14 @@
      (alter state-ref
             (fn [state]
               (-> state
-                  (assoc-in [::values id] value)
-                  (update-in [::measurements id ]
-                             (fn [vals]
-                               (conj vals {::value value
-                                           ::timestamp (System/currentTimeMillis)}))))))))
+                  (update-in [id] add-value value))))))
 
   (value [self id]
-    (get-value @state-ref id))
+    (let [ss @state-ref]
+      (get-value (get ss id) ss)))
 
   (measurements [self id]
-    (get-in @state-ref [::measurements id]))
+    (history (get @state-ref id)))
 
   java.io.Closeable
   (close [self]
@@ -268,7 +303,7 @@
   ([cfg]
    (let [scheduler (sched/initialize)
          sys (InMemoryStatusSystem. (ref {::next-id 0 ::components {}})
-                                    (ref {::measurements {} ::values {}})
+                                    (ref {})
                                     scheduler)]
      (sched/start scheduler)
      (doseq [c (sort-by id (vals (::components cfg)))]

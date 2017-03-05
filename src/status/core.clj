@@ -35,43 +35,40 @@
   (reset! state (dom/new-system))
   (future (save!)))
 
-(defn- add-component! [f]
+(defn- update! [f]
   (let [result (f @state)]
     (future (save!))
     result))
 
 (defn add-meter!
   ([name] (add-meter! name type/TAny))
-  ([name type] (add-component! #(dom/create-component % {::dom/name name
+  ([name type] (update! #(dom/create-component % {::dom/name name
                                                          ::dom/type type}))))
 
 (defn add-min-signal! [name inputs]
-  (add-component! #(dom/create-component
+  (update! #(dom/create-component
                     %
                     {::dom/name name
                      ::dom/function {::dom/function-id :min
                                      ::dom/dependencies inputs
-                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
-                                                              type/TNumber)}})))
+                                     ::dom/type ::type/number*->number}})))
 
 (defn add-max-signal! [name inputs]
-  (add-component! #(dom/create-component
+  (update! #(dom/create-component
                     %
                     {::dom/name name
                      ::dom/function {::dom/function-id :max
                                      ::dom/dependencies inputs
-                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
-                                                              type/TNumber)}})))
+                                     ::dom/type ::type/number*->number}})))
 
 (defn add-weighted-signal! [name inputs weights]
-  (add-component! #(dom/create-component
+  (update! #(dom/create-component
                     %
                     {::dom/name name
                      ::dom/function {::dom/function-id :weighted
                                      ::dom/dependencies inputs
                                      ::dom/parameters {::dom/weights weights}
-                                     ::dom/type (type/fn-type (type/varargs-type [] type/TNumber)
-                                                              type/TNumber)}})))
+                                     ::dom/type ::type/number*->number}})))
 
 (defn capture! [id value]
   (dom/capture @state id value))
@@ -148,12 +145,20 @@
 (defn create-signal
   [req]
   (let [spec (parse-json-ext (ring-req/body-string req))
-        id (add-component! #(dom/create-component % spec))]
+        id (update! #(dom/create-component % spec))]
     (bootstrap/edn-response id)))
+
+(defn update-signal
+  [req]
+  (let [spec (parse-json-ext (ring-req/body-string req))
+        id (Long/parseLong (get-in req [:path-params :id]))]
+    (update! #(dom/update-component % id spec))
+    (get-signal req)))
 
 (defroutes routes
   [[["/api/signal/:id"
-     {:get get-signal}]
+     {:get get-signal
+      :put update-signal}]
 
     ["/api/signal/:id/full"
      {:get get-signal-full}]
