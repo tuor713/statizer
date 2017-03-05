@@ -27,10 +27,13 @@
 
 (spec/def ::dependencies (spec/* ::id))
 (spec/def ::function-id #{::min ::max ::weighted})
+(spec/def ::missing-policy #{::default-input ::ignore-value ::default-result})
 (spec/def ::function (spec/keys :req [::function-id
                                       ::dependencies
                                       ::type]
-                                :opt [::parameters]))
+                                :opt [::parameters
+                                      ::default-value
+                                      ::missing-policy]))
 
 (spec/def ::timestamp integer?)
 (spec/def ::measurement (spec/keys :req [::timestamp ::value]))
@@ -142,13 +145,30 @@
   (let [default (::default-value spec)]
     (cond
       (derived? spec)
-      (let [f (component-function spec)]
-        (fn [state]
-          (or (let [vals (map (partial get-value state)
-                              (get-in spec [::function ::dependencies]))]
-                (when (every? #(not= nil %) vals)
-                  (apply f vals)))
-              default)))
+      (let [f (component-function spec)
+            policy (get-in spec [::function ::missing-policy] ::default-result)
+            dependencies (get-in spec [::function ::dependencies])
+            deps #(map (partial get-value %) dependencies)]
+        (cond
+          (= policy ::default-result)
+          (fn [state]
+            (or (let [vals (deps state)]
+                  (when (every? #(not= nil %) vals)
+                    (apply f vals)))
+                default))
+
+          (= policy ::default-input)
+          (let [dv (get-in spec [::function ::default-value])]
+            (fn [state]
+              (or (apply f (map #(or % dv) (deps state)))
+                  default)))
+
+          (= policy ::ignore-value)
+          (fn [state]
+            (or (let [vals (remove nil? (deps state))]
+                  (when (seq vals)
+                    (apply f vals)))
+                default))))
 
       (= ::url-source (get-in spec [::source ::source-type]))
       (let [initial (slurp (get-in spec [::source ::url]))

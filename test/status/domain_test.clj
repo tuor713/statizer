@@ -104,6 +104,46 @@
                                          ::sut/type (type/fn-type (type/varargs-type [] type/TNumber)
                                                                   type/TNumber)}})))))))
 
+(t/deftest test-defaulting-policies
+  (with-open [sys (sut/new-system)]
+    (let [m1 (sut/create-component sys {:name 'a :type type/TNumber})
+          m2 (sut/create-component sys {:name 'b :type type/TNumber})
+          config {:name 'min
+                  :function {:function-id :min
+                             :dependencies [m1 m2]
+                             :type ::type/number*->number}}
+          min (sut/create-component sys config)
+          min-with-default (sut/create-component sys (assoc config :default-value 0))
+          min-ignore (sut/create-component sys (assoc-in
+                                                config
+                                                [:function :missing-policy]
+                                                :ignore-value))
+          min-default (sut/create-component
+                       sys
+                       (-> config
+                           (assoc-in [:function :missing-policy] :default-input)
+                           (assoc-in [:function :default-value] 0)))]
+      (t/is (nil? (sut/value sys min)))
+      (t/is (= 0 (sut/value sys min-with-default)))
+      (t/is (nil? (sut/value sys min-ignore)))
+      (t/is (= 0 (sut/value sys min-default)))
+
+      (sut/capture sys m1 -1)
+      (t/is (nil? (sut/value sys min)))
+      (t/is (= 0 (sut/value sys min-with-default)))
+      (t/is (= -1 (sut/value sys min-ignore)))
+      (t/is (= -1 (sut/value sys min-default)))
+
+      (sut/capture sys m1 1)
+      (t/is (= 1 (sut/value sys min-ignore)))
+      (t/is (= 0 (sut/value sys min-default)))
+
+      (sut/capture sys m2 2)
+      (t/is (= 1 (sut/value sys min)))
+      (t/is (= 1 (sut/value sys min-with-default)))
+      (t/is (= 1 (sut/value sys min-ignore)))
+      (t/is (= 1 (sut/value sys min-default))))))
+
 (t/deftest test-weighted-signal
   (let [sys (sut/new-system)
         m1 (sut/create-component sys {::sut/name 'a ::sut/type type/TNumber})
