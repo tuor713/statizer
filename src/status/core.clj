@@ -155,10 +155,20 @@
     (update! #(dom/update-component % id spec))
     (get-signal req)))
 
+(defn delete-signal
+  [req]
+  (let [id (Long/parseLong (get-in req [:path-params :id]))]
+    (try
+      (update! #(dom/delete-component % id))
+      (bootstrap/json-response {:success true})
+      (catch Exception e
+        (bootstrap/json-response {:success false})))))
+
 (defroutes routes
   [[["/api/signal/:id"
      {:get get-signal
-      :put update-signal}]
+      :put update-signal
+      :delete delete-signal}]
 
     ["/api/signal/:id/full"
      {:get get-signal-full}]

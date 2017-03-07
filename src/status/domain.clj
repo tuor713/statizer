@@ -110,6 +110,8 @@
 (defprotocol StatusSystem
   (create-component [self spec] "Returns id of component created")
   (update-component [self id spec] "Update component")
+  (delete-component [self id]
+    "Delete a component. Will fail (by exception) if a component is used from others.")
   (get-component [self id] "Returns the component spec")
   (components [self] "Get all components")
   (capture [self id value] "Adds a new measurement")
@@ -246,6 +248,11 @@
        v))
    spec))
 
+(defn- in-use? [sys id]
+  (some
+   (fn [c] (contains? (dependencies c) id))
+   (components sys)))
+
 (defrecord InMemoryStatusSystem [config-ref state-ref scheduler]
   StatusSystem
   (create-component [self spec]
@@ -272,6 +279,14 @@
        (dispose (get @state-ref id))
        (alter state-ref assoc id (component-value spec scheduler)))))
 
+  (delete-component [self id]
+    (dosync
+     (when (in-use? self id)
+       (throw (IllegalStateException. (str "Component " id " cannot be deleted because it is in use."))))
+     (alter config-ref update ::components #(dissoc % id))
+     (dispose (get @state-ref id))
+     (alter state-ref dissoc id)))
+
   (get-component [self id]
     (get-in @config-ref [::components id]))
 
@@ -289,6 +304,8 @@
 
   (value [self id]
     (let [ss @state-ref]
+      (when-not (contains? ss id)
+        (throw (IllegalArgumentException. (str "Component " id " is not defined."))))
       (get-value (get ss id) ss)))
 
   (measurements [self id]
@@ -325,4 +342,3 @@
     {}
     (sort-by id (components sys2))))
   sys1)
-

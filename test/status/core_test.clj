@@ -57,6 +57,10 @@
             {:body spec
              :throw-exceptions false}))
 
+(defn delete-signal [id]
+  (http/delete (url (str "/api/signal/" id))
+               {:throw-exceptions? false}))
+
 (t/deftest test-signal-get
   (let [id (sut/add-meter! 'a/signal)]
     (sut/capture! id 1)
@@ -102,6 +106,16 @@
       (t/is (ok? r2))
       (t/is (json? {:name "b" :id 0 :dependencies [] :value nil}
                    (get-signal id))))))
+
+(t/deftest test-delete-signal
+  (let [res (post-signal "{\"~:name\":\"a\", \"~:type\":\"~:status.types/number\"}")
+        id (:body res)]
+    (t/is (returns? "0" res))
+    gs
+    (t/is (json? {:success true}
+                 (delete-signal id)))
+    (t/is (json? {:success false}
+                 (delete-signal id)))))
 
 
 

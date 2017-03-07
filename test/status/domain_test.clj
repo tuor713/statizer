@@ -205,6 +205,33 @@
           (finally
             (.delete tf)))))))
 
+(t/deftest test-delete-component
+  (with-open [sys (sut/new-system)]
+    (t/testing "Basic delete"
+      (let [id (sut/create-component sys {:name 'a :type type/TAny})]
+        (sut/capture sys id 1)
+        (t/is (contains? (set (map sut/id (sut/components sys))) id))
+        (t/is (= 1 (sut/value sys id)))
+
+        (sut/delete-component sys id)
+        (t/is (not (contains? (set (map sut/id (sut/components sys))) id)))
+        (t/is (thrown? IllegalArgumentException (sut/value sys id)))))
+
+    (t/testing "Deleting with dependencies"
+      (let [id (sut/create-component sys {:name 'a :type type/TNumber})
+            min (sut/create-component sys {:name 'min
+                                           :function {:function-id :min
+                                                      :type ::type/number*->number
+                                                      :dependencies [id]}})]
+        (t/is (thrown? IllegalStateException
+                       (sut/delete-component sys id)))
+        (t/is (contains? (set (map sut/id (sut/components sys))) id))
+        (sut/delete-component sys min)
+        (t/is (not (contains? (set (map sut/id (sut/components sys))) min)))
+        (sut/delete-component sys id)
+        (t/is (not (contains? (set (map sut/id (sut/components sys))) id)))
+        ))))
+
 (t/deftest test-weighted-signal
   (let [sys (sut/new-system)
         m1 (sut/create-component sys {::sut/name 'a ::sut/type type/TNumber})
