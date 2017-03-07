@@ -111,7 +111,6 @@
   (let [res (post-signal "{\"~:name\":\"a\", \"~:type\":\"~:status.types/number\"}")
         id (:body res)]
     (t/is (returns? "0" res))
-    gs
     (t/is (json? {:success true}
                  (delete-signal id)))
     (t/is (json? {:success false}
