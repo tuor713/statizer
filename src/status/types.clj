@@ -9,8 +9,10 @@
 
 (def TAny ::any)
 (def TNumber ::number)
+(def TString ::string)
 
 (derive ::number ::any)
+(derive ::string ::any)
 (declare aliases)
 
 (defn- a2t
@@ -167,6 +169,31 @@
 (defn varargs-type [types var-type]
   (Varargs. types var-type))
 
+
+(defrecord MapType [key-type value-type]
+  Type
+  (substitutes? [self other]
+    (cond
+      (contains? aliases other)
+      (substitutes? self (aliases other))
+
+      (instance? MapType other)
+      (and (substitutes? (:key-type self) (:key-type other))
+           (substitutes? (:value-type self) (:value-type other)))
+
+      :else false)))
+
+(defmethod print-method MapType [x ^java.io.Writer w]
+  (.write w "#map-t")
+  (print-method {:key-type (:key-type x) :value-type (:value-type x)} w))
+
+(defn map-type [key-type value-type]
+  (MapType. key-type value-type))
+
+(defn map-type? [t]
+  (instance? MapType (get aliases t t)))
+
+
 ;; Function types
 
 (defrecord FunctionType [domain range]
@@ -208,7 +235,8 @@
 (def aliases
   {::indicator (range-type 0 1)
    ::number*->number (fn-type (varargs-type [] ::number) ::number)
-   ::indicator*->indicator (fn-type (varargs-type [] ::indicator) ::indicator)})
+   ::indicator*->indicator (fn-type (varargs-type [] ::indicator) ::indicator)
+   ::multi-indicator (map-type ::string ::indicator)})
 
 (def TIndicator ::indicator)
 

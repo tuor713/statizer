@@ -317,3 +317,19 @@
       (t/is (= 'b (sut/component-name (sut/get-component sys 1))))
       (t/is (= 'min (sut/component-name (sut/get-component sys 2))))
       (t/is (= #{1} (sut/dependencies (sut/get-component sys 2)))))))
+
+(t/deftest test-multi-value-components
+  (with-open [sys (sut/new-system)]
+    (let [mid (sut/create-component
+               sys
+               {::sut/name 'map
+                ::sut/type (type/map-type type/TAny type/TNumber)})]
+      (t/is (nil? (sut/value sys mid)))
+
+      (sut/capture sys mid {:a 1 :b 2})
+      (t/is (= {:a 1 :b 2}
+               (sut/value sys mid)))
+
+      (sut/capture sys mid [:c 3])
+      (t/is (= {:a 1 :b 2 :c 3}
+               (sut/value sys mid))))))

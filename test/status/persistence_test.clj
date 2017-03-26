@@ -27,6 +27,8 @@
 
     (types/varargs-type [types/TNumber types/TNumber] types/TAny)
 
+    (types/map-type types/TAny types/TNumber)
+
     (types/fn-type (types/tuple-type types/TNumber) types/TAny)))
 
 (t/deftest test-file-persistence

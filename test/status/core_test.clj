@@ -34,6 +34,10 @@
   (and (ok? resp)
        (= expected (json/parse-string (:body resp) true))))
 
+(defn- edn? [expected resp]
+  (and (ok? resp)
+       (= expected (read-string (:body resp)))))
+
 (defn get-signal [id]
   (http/get (url "/api/signal/" id)
             {:throw-exceptions false}))
@@ -44,6 +48,11 @@
 
 (defn post-value [id value]
   (http/post (url "/api/meter/" id "/value")
+             {:body (pr-str value)
+              :throw-exceptions false}))
+
+(defn post-kv-value [id key value]
+  (http/post (url "/api/meter/" id "/value/" key)
              {:body (pr-str value)
               :throw-exceptions false}))
 
@@ -115,6 +124,23 @@
                  (delete-signal id)))
     (t/is (json? {:success false}
                  (delete-signal id)))))
+
+(t/deftest test-multi-value-signal
+  (let [res (post-signal "{\"~:name\":\"a\", \"~:type\":\"~:status.types/multi-indicator\"}")
+        id (:body res)]
+    (t/is (returns? "0" res))
+
+    (t/is (ok? (post-value id {"a" 1 "b" 2})))
+    (t/is (edn? {"a" 1 "b" 2} (get-signal-value id)))
+
+    (t/is (ok? (post-kv-value id "a" 2)))
+    (t/is (edn? {"a" 2 "b" 2} (get-signal-value id)))
+
+    (t/is (ok? (post-kv-value id "c" 3)))
+    (t/is (edn? {"a" 2 "b" 2 "c" 3} (get-signal-value id)))
+
+    (t/is (ok? (post-value id {"a" 2 "b" 4})))
+    (t/is (edn? {"a" 2 "b" 4 } (get-signal-value id)))))
 
 
 

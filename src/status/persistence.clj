@@ -17,6 +17,7 @@
                                                           (:lower-inclusive? v)
                                                           (:upper-inclusive? v)))
                 'vector-t (fn [v] (status.types.VectorType. (:type v)))
+                'map-t (fn [v] (status.types.MapType. (:key-type v) (:value-type v)))
                 'tuple-t (fn [v] (status.types.TupleType. v))
                 'varargs-t (fn [v] (status.types.Varargs. (:types v) (:var-type v)))
                 'function-t (fn [v] (status.types.FunctionType. (:domain v) (:range v)))}}

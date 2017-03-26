@@ -131,6 +131,16 @@
         (bootstrap/edn-response (dom/value @state id)))
       bootstrap/not-found)))
 
+(defn add-part-measure!
+  [req]
+  (let [id (Long/parseLong (get-in req [:path-params :id]))
+        key (get-in req [:path-params :key])]
+    (if-let [meter (dom/get-component @state id)]
+      (do
+        (capture! id [key (edn/read-string (ring-req/body-string req))])
+        (bootstrap/edn-response (dom/value @state id)))
+      bootstrap/not-found)))
+
 (defn- parse-json-ext
   "Parse JSON with the transit-style extension for keywords"
   [s]
@@ -178,6 +188,9 @@
 
     ["/api/meter/:id/value"
      {:post add-measurement!}]
+
+    ["/api/meter/:id/value/:key"
+     {:post add-part-measure!}]
 
     ["/api/signal"
      {:post create-signal}]]])

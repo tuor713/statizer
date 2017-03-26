@@ -22,6 +22,10 @@
   (t/is (sut/substitutes? sut/TAny (sut/fn-type (sut/tuple-type) sut/TAny))
         "Any < function"))
 
+(t/deftest test-string-type
+  (t/is (below? sut/TAny sut/TString))
+  (t/is (incompatible? sut/TNumber sut/TString)))
+
 (t/deftest test-numeric-types
   (t/is (below? sut/TAny sut/TNumber))
 
@@ -66,6 +70,20 @@
                   (sut/varargs-type [sut/TAny sut/TAny sut/TAny] sut/TAny)))
     (t/is (incompatible? sut/TNumber (sut/varargs-type [sut/TAny sut/TAny] sut/TAny)))))
 
+(t/deftest test-map-types
+  (t/is (below? sut/TAny (sut/map-type sut/TAny sut/TAny)))
+  (t/is (incompatible? sut/TNumber (sut/map-type sut/TAny sut/TAny)))
+  (t/is (below? (sut/map-type sut/TAny sut/TAny)
+                (sut/map-type sut/TNumber sut/TAny)))
+  (t/is (below? (sut/map-type sut/TAny sut/TAny)
+                (sut/map-type sut/TAny sut/TNumber)))
+  (t/is (incompatible? (sut/map-type sut/TNumber sut/TAny)
+                       (sut/map-type sut/TAny sut/TNumber)))
+  (t/is (not (sut/map-type? sut/TAny)))
+  (t/is (sut/map-type? (sut/map-type sut/TAny sut/TAny)))
+
+  )
+
 (t/deftest test-function-types
   (t/is (below? sut/TAny (sut/fn-type (sut/tuple-type) sut/TAny)))
 
@@ -102,4 +120,7 @@
   (t/is (= sut/TNumber
            (sut/fn-range ::sut/number*->number)))
   (t/is (equiv? (sut/varargs-type [] sut/TNumber)
-                (sut/fn-domain ::sut/number*->number))))
+                (sut/fn-domain ::sut/number*->number)))
+
+  (t/is (equiv? ::sut/multi-indicator (sut/map-type sut/TString sut/TIndicator)))
+  (t/is (sut/map-type? ::sut/multi-indicator)))

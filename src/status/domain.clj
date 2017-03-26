@@ -11,7 +11,8 @@
             [clojurewerkz.quartzite.jobs :as job]
             [clojurewerkz.quartzite.triggers :as trig]
             [clojurewerkz.quartzite.conversion :as qc]
-            [clojurewerkz.quartzite.schedule.simple :as qsimple]))
+            [clojurewerkz.quartzite.schedule.simple :as qsimple]
+            [status.types :as type]))
 
 ;; Specs for data in the system
 
@@ -60,13 +61,14 @@
                                             (or ::type ::function)]
                                       :opt [::default-value
                                             ::source]))
+
 (spec/def ::component-type #{::push
                              ::pull
                              ::computed})
 (spec/def ::component (spec/keys :req [::id
                                        ::name
                                        (or ::type ::function)]
-                                 :opt [::default-value
+                                 :opt [::default-value 
                                        ::source]))
 
 (spec/def ::next-id ::id)
@@ -154,7 +156,20 @@
 (defrecord PureValue [v history]
   Signal
   (get-value [_ _] v)
-  (add-value [_ vnew] (PureValue. vnew (conj history {::value v ::timestamp (System/currentTimeMillis)})))
+  (add-value [_ vnew] (PureValue. vnew (conj history {::value vnew ::timestamp (System/currentTimeMillis)})))
+  (history [_] history)
+  (dispose [_]))
+
+(defrecord PureMapValue [v history]
+  Signal
+  (get-value [_ _] v)
+  (add-value [self vnew]
+    (let [vnew (if (map? vnew)
+                 vnew
+                 (merge v (apply hash-map vnew)))]
+      (PureMapValue.
+       vnew
+       (conj history {::value vnew ::timestamp (System/currentTimeMillis)}))))
   (history [_] history)
   (dispose [_]))
 
@@ -216,6 +231,13 @@
           (history [_] (throw (UnsupportedOperationException. "Can't set value on a pull signal")))
           (dispose [_]
             (sched/delete-job scheduler jkey))))
+
+      (type/map-type? (::type spec))
+      (PureMapValue.
+       default
+       (if (nil? default)
+         []
+         [{::value default ::timestamp (System/currentTimeMillis)}]))
 
       :else
       (PureValue.
