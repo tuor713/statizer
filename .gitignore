@@ -9,3 +9,7 @@ pom.xml.asc
 /.nrepl-port
 .hgignore
 .hg/
+.DS_Store
+figwheel_server.log
+static/.figwheel*
+static/cljs

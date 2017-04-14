@@ -43,7 +43,7 @@
             {:throw-exceptions false}))
 
 (defn get-signal-value [id]
-  (http/get (url "/api/signal/" id "/value")
+  (http/get (url "/api/signal/" id "/value?format=edn")
             {:throw-exceptions false}))
 
 (defn post-value [id value]

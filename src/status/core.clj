@@ -75,9 +75,18 @@
 
 ;; Web handlers
 
-(defn all-signals []
+(defn format-response [req data]
+  (let [format (get-in req [:query-params :format])
+        formatter
+        (cond
+          (= "edn" format) bootstrap/edn-response
+          :else bootstrap/json-response)]
+    (formatter data)))
+
+(defn all-signals [req]
   (let [ss @state]
-    (bootstrap/json-response
+    (format-response
+     req
      (vec
       (sort-by :name
                (for [comp (dom/components ss)]
@@ -88,38 +97,42 @@
 (defn get-signal
   [req]
   (if (= "all" (get-in req [:path-params :id]))
-    (all-signals)
+    (all-signals req)
     (let [id (Long/parseLong (get-in req [:path-params :id]))]
       (if-let [signal (dom/get-component @state id)]
-        (bootstrap/json-response {:id id
-                                  :name (dom/component-name signal)
-                                  :value (dom/value @state id)
-                                  :dependencies (vec (dom/dependencies signal))})
+        (format-response
+         req
+         {:id id
+          :name (dom/component-name signal)
+          :value (dom/value @state id)
+          :dependencies (vec (dom/dependencies signal))})
         bootstrap/not-found))))
 
 (defn get-signal-full
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
     (if-let [signal (dom/get-component @state id)]
-      (bootstrap/json-response {:id id
-                                :name (dom/component-name signal)
-                                :value (dom/value @state id)
-                                :dependencies
-                                (mapv
-                                 (fn [id]
-                                   (let [s (dom/get-component @state id)
-                                         v (dom/value @state id)]
-                                     {:id id
-                                      :name (dom/component-name s)
-                                      :value v}))
-                                 (dom/dependencies signal))})
+      (format-response
+       req
+       {:id id
+        :name (dom/component-name signal)
+        :value (dom/value @state id)
+        :dependencies
+        (mapv
+         (fn [id]
+           (let [s (dom/get-component @state id)
+                 v (dom/value @state id)]
+             {:id id
+              :name (dom/component-name s)
+              :value v}))
+         (dom/dependencies signal))})
       bootstrap/not-found)))
 
 (defn get-signal-value
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
     (if-let [signal (dom/get-component @state id)]
-      (bootstrap/edn-response (dom/value @state id))
+      (format-response req (dom/value @state id))
       bootstrap/not-found)))
 
 (defn add-measurement!
@@ -128,7 +141,7 @@
     (if-let [meter (dom/get-component @state id)]
       (do
         (capture! id (edn/read-string (ring-req/body-string req)))
-        (bootstrap/edn-response (dom/value @state id)))
+        (format-response req (dom/value @state id)))
       bootstrap/not-found)))
 
 (defn add-part-measure!
@@ -138,7 +151,7 @@
     (if-let [meter (dom/get-component @state id)]
       (do
         (capture! id [key (edn/read-string (ring-req/body-string req))])
-        (bootstrap/edn-response (dom/value @state id)))
+        (format-response req (dom/value @state id)))
       bootstrap/not-found)))
 
 (defn- parse-json-ext
@@ -156,7 +169,7 @@
   [req]
   (let [spec (parse-json-ext (ring-req/body-string req))
         id (update! #(dom/create-component % spec))]
-    (bootstrap/edn-response id)))
+    (format-response req id)))
 
 (defn update-signal
   [req]
@@ -170,9 +183,9 @@
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
     (try
       (update! #(dom/delete-component % id))
-      (bootstrap/json-response {:success true})
+      (format-response req {:success true})
       (catch Exception e
-        (bootstrap/json-response {:success false})))))
+        (format-response req {:success false})))))
 
 (defroutes routes
   [[["/api/signal/:id"
