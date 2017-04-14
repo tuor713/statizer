@@ -68,7 +68,7 @@
 (spec/def ::component (spec/keys :req [::id
                                        ::name
                                        (or ::type ::function)]
-                                 :opt [::default-value 
+                                 :opt [::default-value
                                        ::source]))
 
 (spec/def ::next-id ::id)

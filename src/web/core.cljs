@@ -145,16 +145,17 @@
     (render [_]
       (container
        (row
-        (dom/div
-         #js {:className "page-header status-heading"}
-         (dom/h1 nil "Statizer")))
+        (div "col-lg-6 col-lg-offset-3"
+             (dom/div
+              #js {:className "page-header status-heading"}
+              (dom/h1 nil "Signal Overview"))
 
-       (status-table data)
+             (status-table data)
 
-       (dom/button
-        #js {:className "btn btn-primary"
-             :onClick #(load-all)}
-        "Refresh")))))
+             (dom/button
+              #js {:className "btn btn-primary"
+                   :onClick #(load-all)}
+              "Refresh")))))))
 
 (defroute root-path "/" {}
   (load-all)

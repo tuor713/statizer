@@ -227,7 +227,8 @@
   (capture! 1 1)
   (let [mid (add-meter! 'jobs.status ::type/multi-indicator)]
     (capture! mid ['job.a 0])
-    (capture! mid ['job.b 1])))
+    (capture! mid ['job.b 1])
+    (capture! mid ['job.c 1])))
 
 (defn run-dev
   ([] (run-dev 8080))
