@@ -224,7 +224,10 @@
   (add-max-signal! 'any.job.passed [0 1])
   (add-weighted-signal! 'jobs.weighted [0 1] [0.5 0.5])
   (capture! 0 0)
-  (capture! 1 1))
+  (capture! 1 1)
+  (let [mid (add-meter! 'jobs.status ::type/multi-indicator)]
+    (capture! mid ['job.a 0])
+    (capture! mid ['job.b 1])))
 
 (defn run-dev
   ([] (run-dev 8080))

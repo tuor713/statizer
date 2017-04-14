@@ -81,15 +81,23 @@
               (for [x signals]
                 (dom/tr nil
                         (dom/td nil
-                                (dom/a
-                                 #js {:href (signal-path {:id (:id x)})}
-                                 (str (:name x))))
+                                (if (:id x)
+                                  (dom/a
+                                   #js {:href (signal-path {:id (:id x)})}
+                                   (str (:name x)))
+                                  (str (:name x))))
                         (dom/td
                          #js {:className (cond
+                                           (map? (:value x)) "status"
                                            (success? (:value x)) "success status"
                                            (warning? (:value x)) "warning status"
                                            :else "danger status")}
-                         (formatted-value (:value x))))))))
+                         (if (map? (:value x))
+                           (str "Multi-valued: " (count (:value x))
+                                (if (= 1 (count (:value x)))
+                                  " entry"
+                                  " entries"))
+                           (formatted-value (:value x)))))))))
 
 (defn single-view [data owner]
   (reify
@@ -100,16 +108,23 @@
         (div "col-lg-6 col-lg-offset-3 status-heading"
          (dom/h2 nil (str (:name data)))))
 
-       (row
-        (div
-         "col-lg-6 col-lg-offset-3"
-         (dom/h4 nil "Status")
-         (dom/div
-          #js {:className (cond
-                            (success? (:value data)) "alert status alert-success"
-                            (warning? (:value data)) "alert status alert-warning"
-                            :else "alert status alert-danger")}
-          (formatted-value (:value data)))))
+       (if (map? (:value data))
+         (row
+          (div
+           "col-lg-6 col-lg-offset-3"
+           (dom/h4 nil "Status")
+           (status-table (map (fn [[k v]] {:name k :value v}) (:value data)))))
+
+         (row
+          (div
+           "col-lg-6 col-lg-offset-3"
+           (dom/h4 nil "Status")
+           (dom/div
+            #js {:className (cond
+                              (success? (:value data)) "alert status alert-success"
+                              (warning? (:value data)) "alert status alert-warning"
+                              :else "alert status alert-danger")}
+            (formatted-value (:value data))))))
 
        (when (seq (:dependencies data))
          (row
