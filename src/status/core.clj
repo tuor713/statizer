@@ -43,7 +43,7 @@
 (defn add-meter!
   ([name] (add-meter! name type/TAny))
   ([name type] (update! #(dom/create-component % {::dom/name name
-                                                         ::dom/type type}))))
+                                                  ::dom/type type}))))
 
 (defn add-min-signal! [name inputs]
   (update! #(dom/create-component
@@ -73,6 +73,10 @@
 (defn capture! [id value]
   (dom/capture @state id value))
 
+(defn get-component [state id]
+  (when-let [c (dom/get-component state id)]
+    (assoc c ::dom/value (dom/value state id))))
+
 ;; Web handlers
 
 (defn format-response [req data]
@@ -99,24 +103,24 @@
   (if (= "all" (get-in req [:path-params :id]))
     (all-signals req)
     (let [id (Long/parseLong (get-in req [:path-params :id]))]
-      (if-let [signal (dom/get-component @state id)]
+      (if-let [signal (get-component @state id)]
         (format-response
          req
          {:id id
           :name (dom/component-name signal)
-          :value (dom/value @state id)
+          :value (::dom/value signal)
           :dependencies (vec (dom/dependencies signal))})
         bootstrap/not-found))))
 
 (defn get-signal-full
   [req]
   (let [id (Long/parseLong (get-in req [:path-params :id]))]
-    (if-let [signal (dom/get-component @state id)]
+    (if-let [signal (get-component @state id)]
       (format-response
        req
        {:id id
         :name (dom/component-name signal)
-        :value (dom/value @state id)
+        :value (::dom/value id)
         :dependencies
         (mapv
          (fn [id]
@@ -127,6 +131,45 @@
               :value v}))
          (dom/dependencies signal))})
       bootstrap/not-found)))
+
+(defn eval-pull [state entity q]
+  (let [all? (some #{'*} q)
+        proto (if all?
+                entity
+                (select-keys entity (mapcat
+                                     #(if (map? %) (keys %) [%])
+                                     q)))]
+    (reduce
+     (fn [res [k spec]]
+       (cond
+         (not (contains? res k))
+         res
+
+         ;; TODO find a more elegant way to identify foreign keys
+         (= k ::dom/dependencies)
+         (update-in res [k]
+                    (fn [deps]
+                      (->> deps
+                           (map (partial get-component state))
+                           (mapv #(eval-pull state % spec)))))
+
+         :else
+         (update-in res [k] #(eval-pull state % spec))))
+     proto
+     (apply concat (filter map? q)))))
+
+(defn pull-signal
+  [req]
+  (let [q (read-string (get-in req [:query-params :q]))]
+    (if (= "all" (get-in req [:path-params :id]))
+      (->> (dom/components @state)
+           (mapv #(assoc % ::dom/value (dom/value @state (dom/id %))))
+           (mapv #(eval-pull @state % q))
+           (bootstrap/edn-response))
+      (let [id (Long/parseLong (get-in req [:path-params :id]))]
+        (if-let [signal (get-component @state id)]
+          (bootstrap/edn-response (eval-pull @state signal q))
+          bootstrap/not-found)))))
 
 (defn get-signal-value
   [req]
@@ -193,6 +236,9 @@
       :put update-signal
       :delete delete-signal}]
 
+    ["/api/signal/:id/pull"
+     {:get pull-signal}]
+
     ["/api/signal/:id/full"
      {:get get-signal-full}]
 
@@ -228,7 +274,17 @@
   (let [mid (add-meter! 'jobs.status ::type/multi-indicator)]
     (capture! mid ['job.a 0])
     (capture! mid ['job.b 1])
-    (capture! mid ['job.c 1])))
+    (capture! mid ['job.c 1])
+
+    (update! #(dom/create-component
+               %
+               {::dom/name 'avg.jobs.status
+                ::dom/function {::dom/function-id ::dom/multi-average
+                                ::dom/dependencies [mid]
+                                ::dom/type (type/fn-type
+                                            (type/tuple-type ::type/multi-indicator)
+                                            ::type/indicator)}}))
+    ))
 
 (defn run-dev
   ([] (run-dev 8080))

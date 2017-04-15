@@ -42,6 +42,9 @@
   (http/get (url "/api/signal/" id)
             {:throw-exceptions false}))
 
+(defn pull-signal [id q]
+  (http/get (url  "/api/signal/" id "/pull?q=" (java.net.URLEncoder/encode (pr-str q)))))
+
 (defn get-signal-value [id]
   (http/get (url "/api/signal/" id "/value?format=edn")
             {:throw-exceptions false}))
@@ -142,6 +145,89 @@
     (t/is (ok? (post-value id {"a" 2 "b" 4})))
     (t/is (edn? {"a" 2 "b" 4 } (get-signal-value id)))))
 
+(t/deftest test-pull
+  (let [aid (sut/add-meter! 'a ::type/indicator)
+        bid (sut/add-meter! 'b ::type/indicator)
+        minid (sut/add-min-signal! 'min [aid bid])
+        maxid (sut/add-max-signal! 'max [aid bid])
+        wid (sut/add-weighted-signal! 'w [minid maxid] [0.3 0.7])]
+    (sut/capture! aid 0)
+    (sut/capture! bid 1)
 
+    (t/is (= {::dom/id aid}
+             (sut/eval-pull @sut/state (sut/get-component @sut/state aid) [::dom/id]))
+          "Supports single element")
 
+    (t/is (= {::dom/id aid ::dom/name 'a}
+             (sut/eval-pull @sut/state (sut/get-component @sut/state aid) [::dom/id ::dom/name]))
+          "Supports several elements")
 
+    (t/is (= {::dom/id aid
+              ::dom/type ::type/indicator
+              ::dom/name 'a
+              ::dom/value 0}
+             (sut/eval-pull @sut/state
+                            (sut/get-component @sut/state aid)
+                            ['*]))
+          "Supports * selector")
+
+    (t/is (= {::dom/name 'min
+              ::dom/function {::dom/function-id ::dom/min}}
+             (sut/eval-pull @sut/state
+                            (sut/get-component @sut/state minid)
+                            [::dom/name {::dom/function [::dom/function-id]}]))
+          "Supports nested selectors")
+
+    (t/is (= {::dom/name 'a}
+             (sut/eval-pull @sut/state
+                            (sut/get-component @sut/state aid)
+                            [::dom/name {::dom/function [::dom/function-id]}]))
+          "Nested selectors on non-existing elements are a no-op")
+
+    (t/is (= {::dom/id minid
+              ::dom/name 'min
+              ::dom/function {::dom/function-id ::dom/min}
+              ::dom/value 0}
+             (sut/eval-pull @sut/state
+                            (sut/get-component @sut/state minid)
+                            ['* {::dom/function [::dom/function-id]}]))
+          "Supports combination of * and attribute nested selectors")
+
+    (t/is (= {::dom/name 'min
+              ::dom/function {::dom/dependencies [{::dom/id aid
+                                                   ::dom/name 'a
+                                                   ::dom/value 0}
+                                                  {::dom/id bid
+                                                   ::dom/name 'b
+                                                   ::dom/value 1}]}}
+             (sut/eval-pull @sut/state
+                            (sut/get-component @sut/state minid)
+                            [::dom/name {::dom/function [{::dom/dependencies [::dom/id ::dom/name ::dom/value]}]}]))
+          "Supports nested references, which get resolved")))
+
+(t/deftest test-pull-api
+  (let [aid (sut/add-meter! 'a ::type/indicator)
+        bid (sut/add-meter! 'b ::type/indicator)
+        minid (sut/add-min-signal! 'min [aid bid])]
+    (sut/capture! aid 0)
+    (sut/capture! bid 1)
+
+    (t/is (edn? {::dom/name 'a}
+                (pull-signal aid [::dom/name])))
+
+    (t/is (edn? {::dom/name 'a ::dom/id aid ::dom/value 0}
+                (pull-signal aid [::dom/name ::dom/value ::dom/id])))
+
+    (t/is (edn? {::dom/name 'min ::dom/id minid ::dom/value 0}
+                (pull-signal minid [::dom/name ::dom/value ::dom/id])))
+
+    (t/is (edn? {::dom/name 'min
+                 ::dom/value 0
+                 ::dom/function {::dom/dependencies [{::dom/id aid
+                                                      ::dom/name 'a
+                                                      ::dom/value 0}
+                                                     {::dom/id bid
+                                                      ::dom/name 'b
+                                                      ::dom/value 1}]}}
+                (pull-signal minid [::dom/name ::dom/value
+                                    {::dom/function [{::dom/dependencies [::dom/id ::dom/name ::dom/value]}]}])))))
