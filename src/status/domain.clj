@@ -27,7 +27,7 @@
 (spec/def ::type #(satisfies? t/Type %))
 
 (spec/def ::dependencies (spec/* ::id))
-(spec/def ::function-id #{::min ::max ::weighted})
+(spec/def ::function-id #{::min ::max ::weighted ::multi-average})
 (spec/def ::missing-policy #{::default-input ::ignore-value ::default-result})
 (spec/def ::function (spec/keys :req [::function-id
                                       ::dependencies
@@ -120,6 +120,9 @@
   (value [self id] "Gets the current value of a component")
   (measurements [self id] "Get list of measurements for component"))
 
+(defn- average [values]
+  (/ (reduce + 0 values) (count values)))
+
 (defmulti component-function #(get-in % [::function ::function-id]))
 (defmethod component-function ::min [spec] min)
 (defmethod component-function ::max [spec] max)
@@ -127,6 +130,9 @@
   (let [weights (get-in spec [::function ::parameters ::weights])]
     (fn [& inputs]
       (reduce + (map * inputs weights)))))
+(defmethod component-function ::multi-average [spec]
+  (fn [input]
+    (average (vals input))))
 
 (defmulti validate-function-spec #(get-in % [::function-id]))
 (defmethod validate-function-spec :default [spec] true)
