@@ -42,6 +42,10 @@
   (http/get (url "/api/signal/" id)
             {:throw-exceptions false}))
 
+(defn get-signal-full [id]
+  (http/get (url "/api/signal/" id "/full")
+            {:throw-exceptions false}))
+
 (defn pull-signal [id q]
   (http/get (url  "/api/signal/" id "/pull?q=" (java.net.URLEncoder/encode (pr-str q)))))
 
@@ -78,7 +82,9 @@
     (sut/capture! id 1)
     (t/is (returns? "1" (get-signal-value id)))
 
-    (t/is (json? {:value 1 :name "a/signal" :id 0 :dependencies []} (get-signal id))))
+    (t/is (json? {:value 1 :name "a/signal" :id 0 :dependencies []} (get-signal id)))
+
+    (t/is (json? {:value 1 :name "a/signal" :id 0 :dependencies []} (get-signal-full id))))
 
   (t/is (not-found? (get-signal-value 12345))
         "Requesting a non-existing signal gives 404 status"))

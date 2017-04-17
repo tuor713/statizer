@@ -120,7 +120,7 @@
        req
        {:id id
         :name (dom/component-name signal)
-        :value (::dom/value id)
+        :value (::dom/value signal)
         :dependencies
         (mapv
          (fn [id]
